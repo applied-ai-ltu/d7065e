@@ -1,0 +1,45 @@
+name: Python CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'fire-detection-sim/**.py'
+      - 'fire-detection-sim/pyproject.toml'
+      - '.github/workflows/ci-python.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'fire-detection-sim/**.py'
+      - 'fire-detection-sim/pyproject.toml'
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fire-detection-sim
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev,ml]"
+
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Format check with ruff
+        run: ruff format --check .
+
+      - name: Type check with mypy
+        run: mypy . --ignore-missing-imports
+        continue-on-error: true
+
+      - name: Run tests
+        run: pytest --cov --cov-report=term-missing
