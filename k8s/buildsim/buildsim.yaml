@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buildsim
+  namespace: ai-edge-intel-course
+  labels:
+    app: buildsim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: buildsim
+  template:
+    metadata:
+      labels:
+        app: buildsim
+    spec:
+      containers:
+        - name: buildsim
+          image: buildsim:latest
+          imagePullPolicy: Never
+          args: ["start", "--host", "0.0.0.0", "--port", "9090"]
+          ports:
+            - containerPort: 9090
+              name: http
+          livenessProbe:
+            exec:
+              command: ["/buildsim", "health", "--url", "http://127.0.0.1:9090/healthz"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            exec:
+              command: ["/buildsim", "health", "--url", "http://127.0.0.1:9090/healthz"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      nodeSelector:
+        kubernetes.io/hostname: proart-master-01
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buildsim
+  namespace: ai-edge-intel-course
+  labels:
+    app: buildsim
+spec:
+  type: NodePort
+  selector:
+    app: buildsim
+  ports:
+    - port: 9090
+      targetPort: 9090
+      nodePort: 30909
+      name: http

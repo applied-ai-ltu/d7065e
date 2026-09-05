@@ -1,0 +1,92 @@
+# === DATA & MODELS ===
+*.csv
+*.tsv
+*.parquet
+*.arrow
+*.feather
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.npy
+*.npz
+*.onnx
+*.pt
+*.pth
+*.pb
+*.tflite
+*.safetensors
+data/
+datasets/
+checkpoints/
+
+# === IMAGES & MEDIA ===
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.svg
+*.mp4
+*.avi
+*.mov
+*.wav
+*.mp3
+
+# === PDFs & OFFICE ===
+*.pdf
+*.docx
+*.doc
+*.pptx
+*.xlsx
+
+# === CREDENTIALS & SECRETS ===
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*secret*
+*credential*
+*password*
+*token*
+
+# === PYTHON ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# === GO ===
+*.exe
+*.dll
+*.so
+*.dylib
+
+# === IDE & OS ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === LOGS ===
+*.log
+logs/
+
+# === DOCKER ===
+docker-compose.override.yml
