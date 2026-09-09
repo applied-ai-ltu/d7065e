@@ -1,5 +1,8 @@
 """Verify the BuildSim client can connect."""
 
+import os
+skipci = pytest.mark.skipif(os.getenv("CI") == "true", reason="No BuildSim in CI")
+
 import pytest
 from fds.buildsim.client import BuildSimClient
 from fds.config import Config
@@ -11,6 +14,7 @@ def config():
 
 
 @pytest.mark.asyncio
+@skipci
 async def test_health(config):
     async with BuildSimClient(config.buildsim.url) as client:
         result = await client.health()
@@ -18,6 +22,7 @@ async def test_health(config):
 
 
 @pytest.mark.asyncio
+@skipci
 async def test_get_building(config):
     async with BuildSimClient(config.buildsim.url) as client:
         building = await client.get_building()
@@ -26,6 +31,7 @@ async def test_get_building(config):
 
 
 @pytest.mark.asyncio
+@skipci
 async def test_get_floor(config):
     async with BuildSimClient(config.buildsim.url) as client:
         floor = await client.get_floor("level0")
