@@ -1,0 +1,15 @@
+buildsim:
+  host: "192.168.68.67"
+  port: 30909
+
+mqtt:
+  host: "192.168.68.67"
+  port: 31174
+  topic_prefix: "building"
+
+database:
+  host: "192.168.68.67"
+  port: 5432
+  user: "postgres"
+  password: ""
+  database: "fire_detection"

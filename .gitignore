@@ -90,3 +90,4 @@ logs/
 
 # === DOCKER ===
 docker-compose.override.yml
+**/target/

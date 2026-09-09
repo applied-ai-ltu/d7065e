@@ -1,5 +1,0 @@
-[workspace]
-members = []
-
-# Future Rust components will be added here
-# e.g. members = ["sensors-rs", "agent-rs"]
