@@ -32,10 +32,18 @@ class DatabaseConfig:
 
 
 @dataclass
+class LLMConfig:
+    base_url: str = "https://192.168.68.67:30400"
+    model: str = "gemma4:12b"
+    fallback_model: str = "phi4-mini"
+
+
+@dataclass
 class Config:
     buildsim: BuildSimConfig = field(default_factory=BuildSimConfig)
     mqtt: MQTTConfig = field(default_factory=MQTTConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
+    llm: LLMConfig = field(default_factory=LLMConfig)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "Config":
@@ -48,4 +56,5 @@ class Config:
             buildsim=BuildSimConfig(**raw.get("buildsim", {})),
             mqtt=MQTTConfig(**raw.get("mqtt", {})),
             database=DatabaseConfig(**raw.get("database", {})),
+            llm=LLMConfig(**raw.get("llm", {})),
         )

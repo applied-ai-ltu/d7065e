@@ -11,5 +11,10 @@ database:
   host: "192.168.68.67"
   port: 30543
   user: "postgres"
-  password: "homelab-tsdb-pass-2026"
+  password: ""
   database: "d7065e"
+
+llm:
+  base_url: "https://192.168.68.67:30400"
+  model: "qwen2.5-14b"
+  fallback_model: "groq/llama-3.1-70b-versatile"
