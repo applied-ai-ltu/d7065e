@@ -10,6 +10,8 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
+import asyncpg
+
 from fds.agent.llm import LLMClient
 from fds.agent.prompts import FIRE_AGENT_SYSTEM
 from fds.buildsim.client import BuildSimClient
@@ -32,6 +34,7 @@ class FireAgent:
         llm_api_key="",
         model="qwen2.5-14b",
         tick_interval=5.0,
+        db_config=None,
     ):
         self.bs = bs
         self.detector = detector
@@ -39,6 +42,7 @@ class FireAgent:
         self.evac = evacuation_planner
         self.llm = LLMClient(base_url=llm_url, api_key=llm_api_key, model=model)
         self.tick_interval = tick_interval
+        self.db_config = db_config
         self._running = False
         self._sensor_history = defaultdict(lambda: defaultdict(list))
         self._window_size = 10
@@ -220,6 +224,36 @@ Assess the situation and provide a response plan."""
             logger.warning(f"Failed to set coverage: {e}")
 
         logger.info(f"FIRE RESPONSE executed for {room} | risk_rooms={[r.room for r in risk_rooms[:5]]}")
+
+        # Log to database
+        severity = "critical" if assessment.get("confidence", 0) >= 0.7 else "warning"
+        await self._log_fire_event(room, level, severity, plan)
+
+    async def _log_fire_event(self, room, level, severity, plan):
+        """Write fire event to TimescaleDB for Grafana."""
+        if not self.db_config:
+            return
+        try:
+            conn = await asyncpg.connect(
+                host=self.db_config["host"],
+                port=self.db_config["port"],
+                user=self.db_config["user"],
+                password=self.db_config["password"],
+                database=self.db_config["database"],
+            )
+            await conn.execute(
+                """INSERT INTO fire_detection_sim.fire_events
+                   (time, event_type, room, level, severity, details)
+                   VALUES (NOW(), $1, $2, $3, $4, $5)""",
+                "fire_detected" if plan.get("assessment", {}).get("is_fire") else "anomaly",
+                room,
+                level,
+                severity,
+                json.dumps(plan),
+            )
+            await conn.close()
+        except Exception as e:
+            logger.warning(f"Failed to log fire event: {e}")
 
     def _log_episode(self, room, features, plan, risk_rooms, evac_routes, verified, issues):
         self._episode_log.append({

@@ -127,6 +127,13 @@ async def main():
             llm_api_key=secrets.get("litellm_api_key", ""),
             model=config.llm.model,
             tick_interval=5.0,
+            db_config={
+                "host": config.database.host,
+                "port": config.database.port,
+                "user": config.database.user,
+                "password": config.database.password,
+                "database": config.database.database,
+            },
         )
 
         # MQTT feed to agent
