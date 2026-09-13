@@ -93,8 +93,11 @@ class EvacuationPlanner:
             logger.warning(f"Room {from_room} not in graph")
             return []
 
+        # Don't block the start room — people need to leave FROM there
+        safe_blocked = [r for r in (blocked_rooms or []) if r != from_room]
+
         start_id = self._node_by_name[from_room]
-        adj = self._build_adjacency(blocked_rooms=blocked_rooms)
+        adj = self._build_adjacency(blocked_rooms=safe_blocked)
         dist, prev = self._dijkstra(start_id, adj)
 
         routes = []

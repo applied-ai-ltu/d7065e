@@ -1,6 +1,6 @@
 """Autonomous fire detection and response agent.
 
-Loop: detect -> plan (via LLM) -> verify -> act -> check outcomes.
+Loop: detect -> spread prediction -> plan (via LLM) -> verify -> act -> check outcomes.
 """
 
 import asyncio
@@ -11,9 +11,11 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from fds.agent.llm import LLMClient
-from fds.agent.prompts import FIRE_AGENT_SYSTEM, VERIFICATION_SYSTEM
+from fds.agent.prompts import FIRE_AGENT_SYSTEM
 from fds.buildsim.client import BuildSimClient
 from fds.models.detector import FireDetector
+from fds.models.spread import FireSpreadPredictor
+from fds.models.evacuation import EvacuationPlanner
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +26,17 @@ class FireAgent:
         self,
         bs: BuildSimClient,
         detector: FireDetector,
+        spread_predictor: FireSpreadPredictor,
+        evacuation_planner: EvacuationPlanner,
         llm_url="https://192.168.68.67:30400",
         llm_api_key="",
-        model="gemma4:12b",
+        model="qwen2.5-14b",
         tick_interval=5.0,
     ):
         self.bs = bs
         self.detector = detector
+        self.spread = spread_predictor
+        self.evac = evacuation_planner
         self.llm = LLMClient(base_url=llm_url, api_key=llm_api_key, model=model)
         self.tick_interval = tick_interval
         self._running = False
@@ -38,10 +44,10 @@ class FireAgent:
         self._window_size = 10
         self._episode_log = []
         self._active_fire = False
+        self._fire_start_time = {}
         self._last_plan = None
 
     def update_reading(self, room, sensor_type, value):
-        """Called by the pipeline to feed sensor data to the agent."""
         history = self._sensor_history[room][sensor_type]
         history.append(value)
         if len(history) > self._window_size:
@@ -55,15 +61,19 @@ class FireAgent:
         return readings
 
     async def _detect(self, room):
-        """Run anomaly detection on a room."""
         readings = self._get_room_readings(room)
         if not self.detector.is_fitted:
             return False, 0.0, {}
         is_fire, score, features = self.detector.predict(readings)
         return is_fire, score, features
 
-    async def _plan(self, room, level, features):
-        """Ask the LLM to generate a response plan."""
+    async def _plan(self, room, level, features, risk_rooms, evac_routes):
+        risk_str = ", ".join([f"{r.room} (risk={r.risk_score})" for r in risk_rooms[:5]]) or "none nearby"
+        route_str = ""
+        if evac_routes:
+            best = evac_routes[0]
+            route_str = f"Best route: {' -> '.join(best.path_rooms)} (distance={best.total_weight})"
+
         prompt = f"""Current sensor readings for room {room} on {level}:
 - Smoke: {features.get('smoke', 0):.1f} %obs/m
 - CO: {features.get('co', 0):.1f} ppm
@@ -72,19 +82,21 @@ class FireAgent:
 - CO rate of change: {features.get('co_rate', 0):.2f}
 - Temperature rate of change: {features.get('temp_rate', 0):.2f}
 
+Rooms at risk from fire spread: {risk_str}
+Evacuation: {route_str}
+
 The anomaly detector has flagged this as a potential fire.
 Assess the situation and provide a response plan."""
 
         try:
             plan = await self.llm.generate_json(prompt, system=FIRE_AGENT_SYSTEM)
-            logger.info(f"LLM plan: {json.dumps(plan, indent=2)}")
+            logger.info(f"LLM plan received")
             return plan
         except Exception as e:
             logger.error(f"LLM planning failed: {e}")
-            return self._fallback_plan(room, level, features)
+            return self._fallback_plan(room, level, features, risk_rooms)
 
-    def _fallback_plan(self, room, level, features):
-        """Rule-based fallback when LLM is unavailable."""
+    def _fallback_plan(self, room, level, features, risk_rooms):
         logger.warning("Using fallback rule-based plan")
         smoke = features.get("smoke", 0)
         co = features.get("co", 0)
@@ -96,11 +108,11 @@ Assess the situation and provide a response plan."""
             "assessment": {
                 "is_fire": is_fire,
                 "confidence": confidence,
-                "reasoning": "Fallback: rule-based assessment (LLM unavailable)"
+                "reasoning": "Fallback: rule-based (LLM unavailable)"
             },
             "affected_room": room,
             "affected_level": level,
-            "risk_rooms": [],
+            "risk_rooms": [r.room for r in risk_rooms[:5]],
             "plan": {
                 "sprinklers": [{"room": room, "action": "activate"}] if is_fire else [],
                 "doors": [{"room": room, "action": "unlock"}] if is_fire else [],
@@ -114,9 +126,7 @@ Assess the situation and provide a response plan."""
         }
 
     async def _verify(self, plan):
-        """Verify the plan against safety constraints."""
         issues = []
-
         assessment = plan.get("assessment", {})
         if assessment.get("is_fire") and assessment.get("confidence", 0) >= 0.7:
             plan_data = plan.get("plan", {})
@@ -124,117 +134,162 @@ Assess the situation and provide a response plan."""
                 issues.append("High-confidence fire but no sprinklers activated")
             if not plan_data.get("doors"):
                 issues.append("Fire detected but no doors unlocked")
-
         if issues:
             logger.warning(f"Verification issues: {issues}")
-
         return len(issues) == 0, issues
 
-    async def _execute(self, plan):
-        """Execute the response plan via BuildSim."""
+    async def _execute(self, plan, risk_rooms, evac_routes):
         assessment = plan.get("assessment", {})
-        plan_data = plan.get("plan", {})
-
         room = plan.get("affected_room", "")
         level = plan.get("affected_level", "")
 
-        if assessment.get("is_fire"):
-            self._active_fire = True
+        if not assessment.get("is_fire"):
+            logger.info(f"No fire confirmed in {room}")
+            return
 
-            # Highlight affected room red
-            appearances = [{"level": level, "room": room, "color": "#ff0000", "brightness": 0.8}]
+        self._active_fire = True
 
-            # Highlight risk rooms orange
-            for risk_room in plan.get("risk_rooms", []):
-                appearances.append({"level": level, "room": risk_room, "color": "#ff8800", "brightness": 0.6})
+        # Room appearances: red=fire, orange=risk, green=safe exits
+        appearances = [{"level": level, "room": room, "color": "#ff0000", "brightness": 0.8}]
+        for r in risk_rooms[:5]:
+            appearances.append({"level": r.level, "room": r.room, "color": "#ff8800", "brightness": 0.6})
 
-            try:
-                await self.bs.set_room_appearance(appearances)
-            except Exception as e:
-                logger.warning(f"Failed to set room appearance: {e}")
+        # Mark evacuation exit rooms green
+        if evac_routes:
+            for route in evac_routes[:2]:
+                if route.path_rooms:
+                    exit_room = route.path_rooms[-1]
+                    appearances.append({"level": level, "room": exit_room, "color": "#00cc00", "brightness": 0.7})
 
-            # Fire effect
-            try:
-                await self.bs.set_effects([{
-                    "id": f"fire-{room}",
-                    "type": "fire",
-                    "label": f"Fire in {room}",
+        try:
+            await self.bs.set_room_appearance(appearances)
+        except Exception as e:
+            logger.warning(f"Failed to set room appearance: {e}")
+
+        # Fire effect
+        try:
+            await self.bs.set_effects([{
+                "id": f"fire-{room}",
+                "type": "fire",
+                "label": f"Fire in {room}",
+                "level": level,
+                "room": room,
+                "radius": 3.0,
+                "intensity": assessment.get("confidence", 0.8),
+            }])
+        except Exception as e:
+            logger.warning(f"Failed to set effects: {e}")
+
+        # Alerts
+        alerts = plan.get("alerts", [])
+        if alerts:
+            bs_alerts = []
+            for alert in alerts:
+                bs_alerts.append({
+                    "id": f"alert-{room}-{int(time.time())}",
+                    "severity": alert.get("severity", "warning"),
+                    "title": alert.get("title", "Fire alert"),
+                    "message": alert.get("message", ""),
                     "level": level,
                     "room": room,
-                    "radius": 3.0,
-                    "intensity": assessment.get("confidence", 0.8),
-                }])
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+            try:
+                await self.bs.set_alerts(bs_alerts)
             except Exception as e:
-                logger.warning(f"Failed to set effects: {e}")
+                logger.warning(f"Failed to set alerts: {e}")
 
-            # Alerts
-            alerts = plan.get("alerts", [])
-            if alerts:
-                bs_alerts = []
-                for alert in alerts:
-                    bs_alerts.append({
-                        "id": f"alert-{room}-{int(time.time())}",
-                        "severity": alert.get("severity", "warning"),
-                        "title": alert.get("title", "Fire alert"),
-                        "message": alert.get("message", ""),
+        # Coverage zones for smoke spread risk
+        try:
+            coverage = []
+            for r in risk_rooms[:5]:
+                pos = self.spread._room_positions.get(r.room)
+                if pos:
+                    coverage.append({
+                        "id": f"risk-{r.room}",
+                        "type": "sphere",
                         "level": level,
-                        "room": room,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "room": r.room,
+                        "position": list(pos),
+                        "radius": r.risk_score * 5.0,
+                        "color": "#ff880088",
                     })
-                try:
-                    await self.bs.set_alerts(bs_alerts)
-                except Exception as e:
-                    logger.warning(f"Failed to set alerts: {e}")
+            if coverage:
+                await self.bs.set_coverage(coverage)
+        except Exception as e:
+            logger.warning(f"Failed to set coverage: {e}")
 
-            logger.info(f"FIRE RESPONSE executed for {room}")
-        else:
-            logger.info(f"No fire confirmed in {room}, monitoring continues")
+        logger.info(f"FIRE RESPONSE executed for {room} | risk_rooms={[r.room for r in risk_rooms[:5]]}")
 
-    def _log_episode(self, room, features, plan, verified, issues):
-        """Log episode for GEPA evolution."""
+    def _log_episode(self, room, features, plan, risk_rooms, evac_routes, verified, issues):
         self._episode_log.append({
             "timestamp": time.time(),
             "room": room,
             "features": features,
             "plan": plan,
+            "risk_rooms": [{"room": r.room, "risk": r.risk_score, "dist": r.distance} for r in risk_rooms],
+            "evacuation": [{"to": r.to_exit, "weight": r.total_weight, "safe": r.is_safe} for r in evac_routes],
             "verified": verified,
             "issues": issues,
         })
 
     async def process_room(self, room, level):
-        """Run one detection-plan-verify-act cycle for a room."""
         is_fire, score, features = await self._detect(room)
-
         if not is_fire:
             return
 
-        logger.info(f"ANOMALY detected in {room}: score={score:.3f}, features={features}")
+        logger.info(f"ANOMALY in {room}: score={score:.3f}, features={features}")
 
-        plan = await self._plan(room, level, features)
+        # Track fire start time
+        if room not in self._fire_start_time:
+            self._fire_start_time[room] = time.time()
+        elapsed = time.time() - self._fire_start_time[room]
+
+        # Predict spread
+        temp = features.get("temperature", 21)
+        risk_rooms = self.spread.predict_spread(room, level, temperature=temp, elapsed=elapsed)
+        logger.info(f"Spread prediction: {[(r.room, r.risk_score) for r in risk_rooms[:5]]}")
+
+        # Plan evacuation avoiding high-risk rooms (but not the fire room itself)
+        blocked = [r.room for r in risk_rooms if r.risk_score > 0.5]
+        evac_routes = self.evac.find_routes(room, blocked_rooms=blocked)
+
+        # Filter out routes with infinite weight
+        valid_routes = [r for r in evac_routes if r.total_weight < float("inf")]
+
+        if valid_routes:
+            logger.info(f"Evacuation: best route to {valid_routes[0].to_exit} via {valid_routes[0].path_rooms[:5]} ({valid_routes[0].total_weight})")
+        else:
+            # Fallback: try without any blocked rooms
+            evac_routes = self.evac.find_routes(room, blocked_rooms=None)
+            valid_routes = [r for r in evac_routes if r.total_weight < float("inf")]
+            if valid_routes:
+                logger.info(f"Evacuation (unblocked): best route to {valid_routes[0].to_exit} ({valid_routes[0].total_weight})")
+            else:
+                logger.warning("No evacuation routes found")
+
+        evac_routes = valid_routes or evac_routes
+
+        # LLM plan
+        plan = await self._plan(room, level, features, risk_rooms, evac_routes)
         verified, issues = await self._verify(plan)
 
         if not verified:
-            logger.warning(f"Plan verification failed: {issues}")
+            logger.warning(f"Verification failed: {issues}")
 
-        await self._execute(plan)
-        self._log_episode(room, features, plan, verified, issues)
+        await self._execute(plan, risk_rooms, evac_routes)
+        self._log_episode(room, features, plan, risk_rooms, evac_routes, verified, issues)
         self._last_plan = plan
 
     async def run(self, rooms):
-        """Main agent loop.
-
-        rooms: list of (room, level) tuples to monitor.
-        """
         self._running = True
         logger.info(f"Agent started, monitoring {len(rooms)} rooms")
-
         while self._running:
             for room, level in rooms:
                 try:
                     await self.process_room(room, level)
                 except Exception as e:
                     logger.error(f"Error processing {room}: {e}")
-
             await asyncio.sleep(self.tick_interval)
 
     def stop(self):
