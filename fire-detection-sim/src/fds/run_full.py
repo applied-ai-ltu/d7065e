@@ -1,4 +1,12 @@
-"""Run the complete fire detection system."""
+"""Run the complete fire detection system.
+
+Architecture (matches reference):
+- Physics engine: computes ground truth
+- Sensor gateway: degrades truth, writes to BuildSim + MQTT
+- Pipeline consumer: MQTT -> TimescaleDB
+- Agent: reads observations from BuildSim, decides, commands actuators
+- Actuator processes: travel toward commands, report state
+"""
 
 import asyncio
 import json
@@ -6,14 +14,12 @@ import logging
 import os
 import time
 
-import paho.mqtt.client as mqtt
-
 from fds.buildsim.client import BuildSimClient
 from fds.config import Config
 from fds.secrets import get_secrets
-from fds.sensors.smoke import SmokeSensor
-from fds.sensors.co import COSensor
-from fds.sensors.temperature import TemperatureSensor
+from fds.physics.engine import PhysicsEngine
+from fds.physics.sensor_gateway import SensorGateway, SensorConfig
+from fds.physics.actuator_process import ActuatorProcess, ActuatorConfig
 from fds.models.detector import FireDetector
 from fds.models.spread import FireSpreadPredictor
 from fds.models.evacuation import EvacuationPlanner
@@ -25,20 +31,36 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 logger = logging.getLogger(__name__)
 
 
-async def cleanup(bs, sensors):
+async def cleanup(bs, equipment_ids):
     try:
         await bs.set_room_appearance([])
         await bs.set_effects([])
         await bs.set_alerts([])
         await bs.set_coverage([])
-        for sensor in sensors:
+        for eid in equipment_ids:
             try:
-                await bs.delete_equipment(sensor.equipment_id)
+                await bs.delete_equipment(eid)
             except Exception:
                 pass
         logger.info("BuildSim cleaned up")
     except Exception as e:
         logger.warning(f"Cleanup error: {e}")
+
+
+async def physics_loop(engine, fire_room, fire_start_delay, dt=2.0):
+    """Run the physics engine with a scheduled fire event."""
+    start = time.time()
+    fire_started = False
+
+    while True:
+        elapsed = time.time() - start
+
+        if not fire_started and elapsed >= fire_start_delay:
+            engine.start_fire(fire_room)
+            fire_started = True
+
+        engine.step(dt)
+        await asyncio.sleep(dt)
 
 
 async def main():
@@ -56,69 +78,129 @@ async def main():
     room = "A109"
     level = "level0"
 
-    # Load detector
-    detector = FireDetector()
-    try:
-        detector.load("models/detector.pkl")
-    except FileNotFoundError:
-        from fds.models.trainer import train_detector
-        detector = train_detector()
-
-    sensors = [
-        SmokeSensor(
-            config=config, equipment_id=f"smoke-{room}", sensor_id=f"{room}-smoke",
-            room=room, level=level, interval=2.0, fire_start=fire_start,
-        ),
-        COSensor(
-            config=config, equipment_id=f"co-{room}", sensor_id=f"{room}-co",
-            room=room, level=level, interval=2.0, fire_start=fire_start,
-        ),
-        TemperatureSensor(
-            config=config, equipment_id=f"temp-{room}", sensor_id=f"{room}-temp",
-            room=room, level=level, interval=2.0, fire_start=fire_start,
-        ),
-    ]
-
-    consumer = PipelineConsumer(config)
+    # --- Physics Engine ---
+    engine = PhysicsEngine(outdoor_temp=-5.0)
 
     async with BuildSimClient(config.buildsim.url) as bs:
-        # Load building graph for spread + evacuation
+        # Load building graph to get rooms and neighbors
         graph = await bs.get_graph(level=level)
+        floor_data = await bs.get_floor(level)
+        room_types = {r["name"]: r.get("type", "room") for r in floor_data.get("rooms", [])}
 
+        # Add rooms to physics engine
+        import math
+        node_positions = {}
+        for node in graph["nodes"]:
+            engine.add_room(node["name"], level)
+            node_positions[node["name"]] = (node["x"], node["y"])
+
+        # Set neighbors based on spatial proximity
+        for name, pos in node_positions.items():
+            neighbors = []
+            for other_name, other_pos in node_positions.items():
+                if other_name == name:
+                    continue
+                dist = math.sqrt((pos[0] - other_pos[0])**2 + (pos[1] - other_pos[1])**2)
+                if dist < 50:
+                    neighbors.append((other_name, dist))
+            engine.set_neighbors(name, neighbors)
+
+        logger.info(f"Physics engine: {len(engine.rooms)} rooms loaded")
+
+        # --- Sensor Gateway ---
+        gateway = SensorGateway(config, engine, interval=2.0)
+
+        # Register sensors for the target room
+        equipment_ids = []
+        sensor_rooms = [room]  # Start with one room, can expand
+
+        for r in sensor_rooms:
+            eq_id = f"sensors-{r}"
+            equipment_ids.append(eq_id)
+            for stype, unit, noise, lag, drift, stuck in [
+                ("smoke", "%obs/m", 0.3, 2.0, 0.001, 0.005),
+                ("co", "ppm", 0.5, 3.0, 0.002, 0.005),
+                ("temperature", "C", 0.15, 1.0, 0.0005, 0.002),
+            ]:
+                gateway.add_sensor(SensorConfig(
+                    sensor_id=f"{r}-{stype}",
+                    equipment_id=eq_id,
+                    room=r,
+                    level=level,
+                    sensor_type=stype,
+                    unit=unit,
+                    noise_sigma=noise,
+                    lag_seconds=lag,
+                    drift_rate=drift,
+                    stuck_probability=stuck,
+                ))
+
+        # --- Actuator Processes ---
+        sprinkler_eq = f"sprinkler-{room}"
+        door_eq = f"door-{room}"
+        equipment_ids.extend([sprinkler_eq, door_eq])
+
+        sprinkler = ActuatorProcess(
+            ActuatorConfig(
+                actuator_id=f"{room}-sprinkler",
+                equipment_id=sprinkler_eq,
+                room=room, level=level,
+                actuator_type="sprinkler",
+                travel_rate=0.5,
+                stuck_probability=0.005,
+            ),
+            engine,
+        )
+
+        door = ActuatorProcess(
+            ActuatorConfig(
+                actuator_id=f"{room}-door",
+                equipment_id=door_eq,
+                room=room, level=level,
+                actuator_type="fire_door",
+                travel_rate=0.3,
+                stuck_probability=0.002,
+            ),
+            engine,
+        )
+
+        # --- Pipeline Consumer ---
+        consumer = PipelineConsumer(config)
+
+        # --- Detector ---
+        detector = FireDetector()
+        try:
+            detector.load("models/detector.pkl")
+        except FileNotFoundError:
+            from fds.models.trainer import train_detector
+            detector = train_detector()
+
+        # --- Spread + Evacuation ---
         spread = FireSpreadPredictor(spread_radius=50.0)
         spread.load_graph(graph)
 
         evac = EvacuationPlanner()
         evac.load_graph(graph)
-        # Find exits: edge corridors + staircase rooms
-        floor_data = await bs.get_floor(level)
-        room_types = {r["name"]: r.get("type", "room") for r in floor_data.get("rooms", [])}
 
-        # Edge corridors: sort corridor nodes by x, take leftmost and rightmost
-        corridor_nodes = [
-            n for n in graph["nodes"] if room_types.get(n["name"]) == "corridor"
-        ]
+        corridor_nodes = [n for n in graph["nodes"] if room_types.get(n["name"]) == "corridor"]
         corridor_nodes.sort(key=lambda n: n["x"])
         exit_names = []
         if corridor_nodes:
             exit_names.extend([n["name"] for n in corridor_nodes[:2]])
             exit_names.extend([n["name"] for n in corridor_nodes[-2:]])
-
-        # Staircase rooms from cross-floor edges
         try:
             cross_edges = await bs.get_cross_floor_edges()
             for edge in cross_edges:
                 if edge.get("from_level", "").endswith(level):
-                    stair_room = edge.get("from_name", "")
-                    if stair_room and stair_room not in exit_names:
-                        exit_names.append(stair_room)
-        except Exception as e:
-            logger.warning(f"Could not load cross-floor edges: {e}")
-
+                    stair = edge.get("from_name", "")
+                    if stair and stair not in exit_names:
+                        exit_names.append(stair)
+        except Exception:
+            pass
         exit_names = list(set(exit_names))
         evac.set_exits(exit_names)
-        logger.info(f"Exits: {exit_names}")
 
+        # --- Agent (reads from BuildSim, not MQTT) ---
         agent = FireAgent(
             bs=bs, detector=detector,
             spread_predictor=spread,
@@ -136,49 +218,39 @@ async def main():
             },
         )
 
-        # MQTT feed to agent
-        mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-        def on_message(client, userdata, msg):
-            try:
-                data = json.loads(msg.payload.decode())
-                agent.update_reading(data["room"], data["type"], data["value"])
-            except Exception as e:
-                logger.warning(f"Agent feed error: {e}")
-
-        mqtt_client.on_message = on_message
-        mqtt_client.connect(config.mqtt.host, config.mqtt.port)
-        mqtt_client.subscribe(f"{config.mqtt.topic_prefix}/#", qos=1)
-        mqtt_client.loop_start()
-
         print("=" * 60)
-        print("Fire Detection System - Full Loop")
+        print("Fire Detection System — Reference Architecture")
         print("=" * 60)
-        print(f"Room: {room} ({level})")
-        print(f"Fire starts at: t={fire_start}s")
+        print(f"Physics engine: {len(engine.rooms)} rooms")
+        print(f"Sensor gateway: {len(gateway.sensors)} sensors (noise + lag + drift + stuck)")
+        print(f"Fire room: {room} | Fire starts at: t={fire_start}s")
         print(f"Agent model: {config.llm.model}")
-        print(f"LLM: {config.llm.base_url}")
-        print(f"Spread radius: 50m | Exits: {exit_names[:5]}")
+        print(f"Exits: {exit_names[:5]}")
         print(f"BuildSim: {config.buildsim.url}")
         print(f"Press Ctrl+C to stop")
         print("=" * 60)
 
-        tasks = [asyncio.create_task(s.run(bs)) for s in sensors]
-        tasks.append(asyncio.create_task(consumer.run()))
-        tasks.append(asyncio.create_task(agent.run([(room, level)])))
+        tasks = [
+            asyncio.create_task(physics_loop(engine, room, fire_start)),
+            asyncio.create_task(gateway.run(bs)),
+            asyncio.create_task(sprinkler.run(bs)),
+            asyncio.create_task(door.run(bs)),
+            asyncio.create_task(consumer.run()),
+            asyncio.create_task(agent.run([(room, level)])),
+        ]
 
         try:
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
             pass
         finally:
-            for s in sensors:
-                s.stop()
+            gateway.stop()
+            sprinkler.stop()
+            door.stop()
             consumer.stop()
             agent.stop()
-            mqtt_client.loop_stop()
-            mqtt_client.disconnect()
 
-            await cleanup(bs, sensors)
+            await cleanup(bs, equipment_ids)
 
             log = agent.get_episode_log()
             if log:

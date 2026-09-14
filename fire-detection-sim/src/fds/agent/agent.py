@@ -52,10 +52,30 @@ class FireAgent:
         self._last_plan = None
 
     def update_reading(self, room, sensor_type, value):
+        """Can still be called externally, but primary path is poll_buildsim."""
         history = self._sensor_history[room][sensor_type]
         history.append(value)
         if len(history) > self._window_size:
             history.pop(0)
+
+    async def poll_buildsim(self, rooms):
+        """Read current sensor values from BuildSim — the canonical observation path."""
+        for room, level in rooms:
+            try:
+                equipment = await self.bs.list_equipment()
+                for eq in equipment:
+                    if eq.get("room") != room:
+                        continue
+                    for sensor in eq.get("sensors", []):
+                        stype = sensor.get("type", "")
+                        value_str = sensor.get("value", "0")
+                        try:
+                            value = float(value_str)
+                            self.update_reading(room, stype, value)
+                        except (ValueError, TypeError):
+                            pass
+            except Exception as e:
+                logger.warning(f"Failed to poll BuildSim for {room}: {e}")
 
     def _get_room_readings(self, room):
         readings = {}
@@ -317,8 +337,11 @@ Assess the situation and provide a response plan."""
 
     async def run(self, rooms):
         self._running = True
-        logger.info(f"Agent started, monitoring {len(rooms)} rooms")
+        logger.info(f"Agent started, monitoring {len(rooms)} rooms (reading from BuildSim)")
         while self._running:
+            # Read observations from BuildSim — the only source of truth
+            await self.poll_buildsim(rooms)
+
             for room, level in rooms:
                 try:
                     await self.process_room(room, level)
