@@ -47,8 +47,11 @@ async def cleanup(bs, equipment_ids):
         logger.warning(f"Cleanup error: {e}")
 
 
-async def physics_loop(engine, fire_room, fire_start_delay, dt=2.0):
-    """Run the physics engine with a scheduled fire event."""
+async def physics_loop(engine, bs, fire_room, fire_start_delay, dt=2.0):
+    """Run the physics engine with a scheduled fire event.
+
+    Reads actuator states from BuildSim each tick (closing the feedback loop).
+    """
     start = time.time()
     fire_started = False
 
@@ -58,6 +61,12 @@ async def physics_loop(engine, fire_room, fire_start_delay, dt=2.0):
         if not fire_started and elapsed >= fire_start_delay:
             engine.start_fire(fire_room)
             fire_started = True
+
+        # Read actuator states from BuildSim (the only source of truth)
+        try:
+            await engine.sync_actuators_from_buildsim(bs)
+        except Exception:
+            pass
 
         engine.step(dt)
         await asyncio.sleep(dt)
@@ -149,7 +158,6 @@ async def main():
                 travel_rate=0.5,
                 stuck_probability=0.005,
             ),
-            engine,
         )
 
         door = ActuatorProcess(
@@ -161,7 +169,6 @@ async def main():
                 travel_rate=0.3,
                 stuck_probability=0.002,
             ),
-            engine,
         )
 
         # --- Pipeline Consumer ---
@@ -231,7 +238,7 @@ async def main():
         print("=" * 60)
 
         tasks = [
-            asyncio.create_task(physics_loop(engine, room, fire_start)),
+            asyncio.create_task(physics_loop(engine, bs, room, fire_start)),
             asyncio.create_task(gateway.run(bs)),
             asyncio.create_task(sprinkler.run(bs)),
             asyncio.create_task(door.run(bs)),
