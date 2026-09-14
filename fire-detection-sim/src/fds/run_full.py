@@ -20,6 +20,8 @@ import time
 
 from fds.buildsim.client import BuildSimClient
 from fds.config import Config
+from fds.api.control import app as control_app, set_engine
+import uvicorn
 from fds.secrets import get_secrets
 from fds.physics.engine import PhysicsEngine
 from fds.physics.sensor_gateway import SensorGateway, SensorConfig
@@ -244,6 +246,11 @@ async def main():
             },
         )
 
+        # Start control API
+        set_engine(engine)
+        control_config = uvicorn.Config(control_app, host="0.0.0.0", port=8089, log_level="warning")
+        control_server = uvicorn.Server(control_config)
+
         print("=" * 60)
         print("Fire Detection System — Reference Architecture")
         print("=" * 60)
@@ -254,10 +261,12 @@ async def main():
         print(f"Exits: {exit_names[:5]}")
         print(f"Occupancy: weekday schedule starting at 9:00")
         print(f"BuildSim: {config.buildsim.url}")
+        print(f"Control API: http://192.168.68.67:8089/docs")
         print(f"Press Ctrl+C to stop")
         print("=" * 60)
 
         tasks = [
+            asyncio.create_task(control_server.serve()),
             asyncio.create_task(physics_loop(engine, bs, room, fire_start, occupancy_sim)),
             asyncio.create_task(gateway.run(bs)),
             asyncio.create_task(sprinkler.run(bs)),
