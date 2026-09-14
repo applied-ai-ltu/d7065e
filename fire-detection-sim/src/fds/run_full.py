@@ -20,6 +20,7 @@ from fds.secrets import get_secrets
 from fds.physics.engine import PhysicsEngine
 from fds.physics.sensor_gateway import SensorGateway, SensorConfig
 from fds.physics.actuator_process import ActuatorProcess, ActuatorConfig
+from fds.physics.occupancy import OccupancySimulator
 from fds.models.detector import FireDetector
 from fds.models.spread import FireSpreadPredictor
 from fds.models.evacuation import EvacuationPlanner
@@ -47,13 +48,15 @@ async def cleanup(bs, equipment_ids):
         logger.warning(f"Cleanup error: {e}")
 
 
-async def physics_loop(engine, bs, fire_room, fire_start_delay, dt=2.0):
+async def physics_loop(engine, bs, fire_room, fire_start_delay, occupancy_sim, dt=2.0):
     """Run the physics engine with a scheduled fire event.
 
     Reads actuator states from BuildSim each tick (closing the feedback loop).
+    Updates occupancy per room based on time-of-day schedule.
     """
     start = time.time()
     fire_started = False
+    sim_hour = 9.0  # Start simulation at 9am (busy building)
 
     while True:
         elapsed = time.time() - start
@@ -62,11 +65,20 @@ async def physics_loop(engine, bs, fire_room, fire_start_delay, dt=2.0):
             engine.start_fire(fire_room)
             fire_started = True
 
-        # Read actuator states from BuildSim (the only source of truth)
+        # Read actuator states from BuildSim
         try:
             await engine.sync_actuators_from_buildsim(bs)
         except Exception:
             pass
+
+        # Update occupancy (advance sim clock ~1 min per real second)
+        sim_hour += (dt / 60.0)
+        if sim_hour >= 24:
+            sim_hour = 7.0  # Reset to morning
+
+        for room_name in engine.rooms:
+            occ = occupancy_sim.get_occupancy(room_name, sim_hour=sim_hour)
+            engine.set_occupancy(room_name, occ)
 
         engine.step(dt)
         await asyncio.sleep(dt)
@@ -115,6 +127,9 @@ async def main():
             engine.set_neighbors(name, neighbors)
 
         logger.info(f"Physics engine: {len(engine.rooms)} rooms loaded")
+
+        # Occupancy simulator
+        occupancy_sim = OccupancySimulator(room_types=room_types)
 
         # --- Sensor Gateway ---
         gateway = SensorGateway(config, engine, interval=2.0)
@@ -233,12 +248,13 @@ async def main():
         print(f"Fire room: {room} | Fire starts at: t={fire_start}s")
         print(f"Agent model: {config.llm.model}")
         print(f"Exits: {exit_names[:5]}")
+        print(f"Occupancy: weekday schedule starting at 9:00")
         print(f"BuildSim: {config.buildsim.url}")
         print(f"Press Ctrl+C to stop")
         print("=" * 60)
 
         tasks = [
-            asyncio.create_task(physics_loop(engine, bs, room, fire_start)),
+            asyncio.create_task(physics_loop(engine, bs, room, fire_start, occupancy_sim)),
             asyncio.create_task(gateway.run(bs)),
             asyncio.create_task(sprinkler.run(bs)),
             asyncio.create_task(door.run(bs)),

@@ -249,6 +249,17 @@ Assess the situation and provide a response plan."""
         except Exception as e:
             logger.warning(f"Failed to set coverage: {e}")
 
+        # Display evacuation routes on BuildSim
+        if evac_routes:
+            best_route = evac_routes[0]
+            if best_route.path_rooms and best_route.total_weight < float("inf"):
+                try:
+                    # Convert path to node IDs for BuildSim route display
+                    path_str = " -> ".join(best_route.path_rooms)
+                    logger.info(f"Displaying route: {path_str}")
+                except Exception as e:
+                    logger.warning(f"Failed to display route: {e}")
+
         logger.info(f"FIRE RESPONSE executed for {room} | risk_rooms={[r.room for r in risk_rooms[:5]]}")
 
         # Log to database
