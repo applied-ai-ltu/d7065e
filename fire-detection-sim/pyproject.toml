@@ -6,6 +6,8 @@ dependencies = [
     "httpx",
     "pyyaml",
     "paho-mqtt",
+    "asyncpg",
+    "hvac",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +23,19 @@ ml = [
     "numpy",
     "pandas",
     "onnxruntime",
+    "skl2onnx",
+]
+tracing = [
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp-proto-grpc",
+
+]
+clearml = [
+    "clearml",
+]
+all = [
+    "fire-detection-sim[ml,tracing,clearml]",
 ]
 
 [tool.setuptools.packages.find]

@@ -8,6 +8,10 @@ Architecture (matches reference):
 - Actuator processes: travel toward commands, report state
 """
 
+# Initialize tracing BEFORE any other imports that touch OpenTelemetry
+from fds.tracing import setup_phoenix
+_tracer_provider = setup_phoenix("d7065e")
+
 import asyncio
 import json
 import logging
