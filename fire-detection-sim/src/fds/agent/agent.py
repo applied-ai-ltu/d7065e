@@ -59,29 +59,35 @@ class FireAgent:
             history.pop(0)
 
     async def poll_buildsim(self, rooms):
-        """Read current sensor values from BuildSim — the canonical observation path."""
+        """Read current sensor values from BuildSim — the canonical observation path.
+
+        Uses GET /api/sensors/{id} for live values, not equipment listing.
+        """
         for room, level in rooms:
-            try:
-                equipment = await self.bs.list_equipment()
-                for eq in equipment:
-                    if eq.get("room") != room:
-                        continue
-                    for sensor in eq.get("sensors", []):
-                        stype = sensor.get("type", "")
-                        value_str = sensor.get("value", "0")
-                        try:
-                            value = float(value_str)
-                            self.update_reading(room, stype, value)
-                        except (ValueError, TypeError):
-                            pass
-            except Exception as e:
-                logger.warning(f"Failed to poll BuildSim for {room}: {e}")
+            for stype in ["smoke", "co", "temperature"]:
+                sensor_id = f"{room}-{stype}"
+                try:
+                    sensor = await self.bs.get_sensor(sensor_id)
+                    value_str = sensor.get("value", "0")
+                    try:
+                        value = float(value_str)
+                        # Skip initial registration value of 0.0
+                        if value == 0.0 and stype in ("temperature",):
+                            continue
+                        self.update_reading(room, stype, value)
+                    except (ValueError, TypeError):
+                        pass
+                except Exception as e:
+                    logger.debug(f"Sensor {sensor_id} not found: {e}")
 
     def _get_room_readings(self, room):
         readings = {}
         for sensor_type in ["smoke", "co", "temperature"]:
-            values = self._sensor_history[room].get(sensor_type, [0.0])
-            readings[sensor_type] = values if values else [0.0]
+            values = self._sensor_history[room].get(sensor_type, [])
+            if not values:
+                readings[sensor_type] = [0.0]
+            else:
+                readings[sensor_type] = values
         return readings
 
     async def _detect(self, room):
