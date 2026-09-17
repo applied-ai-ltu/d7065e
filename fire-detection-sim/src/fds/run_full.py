@@ -102,6 +102,7 @@ async def main():
     fire_start = 60.0
     room = "A109"
     level = "level0"
+    monitored_rooms = ["A109", "A108", "A110", "A107", "A111"]
 
     # --- Physics Engine ---
     engine = PhysicsEngine(outdoor_temp=-5.0)
@@ -140,9 +141,7 @@ async def main():
 
         # Register sensors for the target room
         equipment_ids = []
-        sensor_rooms = [room]  # Start with one room, can expand
-
-        for r in sensor_rooms:
+        for r in monitored_rooms:
             eq_id = f"sensors-{r}"
             equipment_ids.append(eq_id)
             for stype, unit, noise, lag, drift, stuck in [
@@ -164,31 +163,21 @@ async def main():
                 ))
 
         # --- Actuator Processes ---
-        sprinkler_eq = f"sprinkler-{room}"
-        door_eq = f"door-{room}"
-        equipment_ids.extend([sprinkler_eq, door_eq])
-
-        sprinkler = ActuatorProcess(
-            ActuatorConfig(
-                actuator_id=f"{room}-sprinkler",
-                equipment_id=sprinkler_eq,
-                room=room, level=level,
-                actuator_type="sprinkler",
-                travel_rate=0.5,
-                stuck_probability=0.005,
-            ),
-        )
-
-        door = ActuatorProcess(
-            ActuatorConfig(
-                actuator_id=f"{room}-door",
-                equipment_id=door_eq,
-                room=room, level=level,
-                actuator_type="fire_door",
-                travel_rate=0.3,
-                stuck_probability=0.002,
-            ),
-        )
+        actuators = []
+        for r in monitored_rooms:
+            spr_eq = f"sprinkler-{r}"
+            door_eq = f"door-{r}"
+            equipment_ids.extend([spr_eq, door_eq])
+            actuators.append(ActuatorProcess(ActuatorConfig(
+                actuator_id=f"{r}-sprinkler", equipment_id=spr_eq,
+                room=r, level=level, actuator_type="sprinkler",
+                travel_rate=0.5, stuck_probability=0.005,
+            )))
+            actuators.append(ActuatorProcess(ActuatorConfig(
+                actuator_id=f"{r}-door", equipment_id=door_eq,
+                room=r, level=level, actuator_type="fire_door",
+                travel_rate=0.3, stuck_probability=0.002,
+            )))
 
         # --- Pipeline Consumer ---
         consumer = PipelineConsumer(config)
@@ -260,10 +249,9 @@ async def main():
         tasks = [
             asyncio.create_task(physics_loop(engine, bs, room, fire_start, occupancy_sim)),
             asyncio.create_task(gateway.run(bs)),
-            asyncio.create_task(sprinkler.run(bs)),
-            asyncio.create_task(door.run(bs)),
+            *[asyncio.create_task(a.run(bs)) for a in actuators],
             asyncio.create_task(consumer.run()),
-            asyncio.create_task(agent.run([(room, level)])),
+            asyncio.create_task(agent.run([(r, level) for r in monitored_rooms])),
         ]
 
         try:
@@ -272,8 +260,8 @@ async def main():
             pass
         finally:
             gateway.stop()
-            sprinkler.stop()
-            door.stop()
+            for a in actuators:
+                a.stop()
             consumer.stop()
             agent.stop()
 
