@@ -20,6 +20,8 @@ import time
 
 from fds.buildsim.client import BuildSimClient
 from fds.config import Config
+from fds.api.control import app as control_app, SimState, sim
+import uvicorn
 from fds.secrets import get_secrets
 from fds.physics.engine import PhysicsEngine
 from fds.physics.sensor_gateway import SensorGateway, SensorConfig
@@ -52,22 +54,16 @@ async def cleanup(bs, equipment_ids):
         logger.warning(f"Cleanup error: {e}")
 
 
-async def physics_loop(engine, bs, fire_room, fire_start_delay, occupancy_sim, dt=2.0):
-    """Run the physics engine with a scheduled fire event.
+async def physics_loop(engine, bs, occupancy_sim, dt=2.0):
+    """Run the physics engine.
 
     Reads actuator states from BuildSim each tick (closing the feedback loop).
     Updates occupancy per room based on time-of-day schedule.
     """
-    start = time.time()
-    fire_started = False
     sim_hour = 9.0  # Start simulation at 9am (busy building)
 
     while True:
-        elapsed = time.time() - start
 
-        if not fire_started and elapsed >= fire_start_delay:
-            engine.start_fire(fire_room)
-            fire_started = True
 
         # Read actuator states from BuildSim
         try:
@@ -132,6 +128,13 @@ async def main():
             engine.set_neighbors(name, neighbors)
 
         logger.info(f"Physics engine: {len(engine.rooms)} rooms loaded")
+
+        # Wire engine into control API
+        sim.engine = engine
+        sim.running = True
+        sim.start_time = time.time()
+        control_config = uvicorn.Config(control_app, host="0.0.0.0", port=8089, log_level="warning")
+        control_server = uvicorn.Server(control_config)
 
         # Occupancy simulator
         occupancy_sim = OccupancySimulator(room_types=room_types)
@@ -238,7 +241,7 @@ async def main():
         print("=" * 60)
         print(f"Physics engine: {len(engine.rooms)} rooms")
         print(f"Sensor gateway: {len(gateway.sensors)} sensors (noise + lag + drift + stuck)")
-        print(f"Fire room: {room} | Fire starts at: t={fire_start}s")
+        print(f"Fire: trigger via control API (POST http://192.168.68.67:8089/fire/start)")
         print(f"Agent model: {config.llm.model}")
         print(f"Exits: {exit_names[:5]}")
         print(f"Occupancy: weekday schedule starting at 9:00")
@@ -247,7 +250,8 @@ async def main():
         print("=" * 60)
 
         tasks = [
-            asyncio.create_task(physics_loop(engine, bs, room, fire_start, occupancy_sim)),
+            asyncio.create_task(control_server.serve()),
+            asyncio.create_task(physics_loop(engine, bs, occupancy_sim)),
             asyncio.create_task(gateway.run(bs)),
             *[asyncio.create_task(a.run(bs)) for a in actuators],
             asyncio.create_task(consumer.run()),
