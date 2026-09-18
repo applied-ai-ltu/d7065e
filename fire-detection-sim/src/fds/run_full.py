@@ -317,7 +317,7 @@ async def main():
         print(f"Actuators: {actuator_count} registered in BuildSim")
         print(f"Exits: {len(exit_names)}")
         print(f"Agent model: {config.llm.model} (tick=10s)")
-        print(f"Control API: http://192.168.68.67:8089/docs")
+        print(f"Control API: http://localhost:8089/docs")
         print(f"BuildSim: {config.buildsim.url}")
         print(f"Press Ctrl+C to stop")
         print("=" * 60)

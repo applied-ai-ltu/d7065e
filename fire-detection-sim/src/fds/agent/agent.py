@@ -30,7 +30,7 @@ class FireAgent:
         detector: FireDetector,
         spread_predictor: FireSpreadPredictor,
         evacuation_planner: EvacuationPlanner,
-        llm_url="https://192.168.68.67:30400",
+        llm_url="https://localhost:30400",
         llm_api_key="",
         model="qwen2.5-14b",
         tick_interval=5.0,

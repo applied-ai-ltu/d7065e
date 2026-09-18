@@ -14,7 +14,7 @@ def setup_phoenix(project_name="d7065e"):
     try:
         from phoenix.otel import register
 
-        endpoint = os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://192.168.68.67:30317")
+        endpoint = os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:30317")
 
         provider = register(
             project_name=project_name,

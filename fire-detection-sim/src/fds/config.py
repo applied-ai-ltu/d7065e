@@ -7,7 +7,7 @@ from pathlib import Path
 
 @dataclass
 class BuildSimConfig:
-    host: str = "192.168.68.67"
+    host: str = "localhost"
     port: int = 30909
 
     @property
@@ -17,14 +17,14 @@ class BuildSimConfig:
 
 @dataclass
 class MQTTConfig:
-    host: str = "192.168.68.67"
+    host: str = "localhost"
     port: int = 1883
     topic_prefix: str = "building"
 
 
 @dataclass
 class DatabaseConfig:
-    host: str = "192.168.68.67"
+    host: str = "localhost"
     port: int = 5432
     user: str = "postgres"
     password: str = ""
@@ -33,7 +33,7 @@ class DatabaseConfig:
 
 @dataclass
 class LLMConfig:
-    base_url: str = "https://192.168.68.67:30400"
+    base_url: str = "https://localhost:30400"
     model: str = "gemma4:12b"
     fallback_model: str = "phi4-mini"
 

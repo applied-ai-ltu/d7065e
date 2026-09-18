@@ -24,7 +24,7 @@ def _get_tracer():
 
 class LLMClient:
 
-    def __init__(self, base_url="https://192.168.68.67:30400", api_key="", model="qwen2.5-14b"):
+    def __init__(self, base_url="https://localhost:30400", api_key="", model="qwen2.5-14b"):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
