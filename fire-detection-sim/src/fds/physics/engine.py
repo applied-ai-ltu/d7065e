@@ -122,7 +122,7 @@ class PhysicsEngine:
             # Wall heat loss
             delta_wall = self.wall_loss_rate * (room.temperature - self.outdoor_temp) * dt
             # Occupant heat gain (~0.1 C per person per step)
-            heat_occupants = 0.02 * room.occupancy * dt
+            heat_occupants = 0.001 * room.occupancy * dt
 
             # Fire heat gain
             heat_fire = 0.0

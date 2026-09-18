@@ -139,12 +139,20 @@ class SensorGateway:
                 "value": "0.0",
             })
 
+        registered = 0
+        skipped = 0
         for eq in equipment.values():
             try:
                 await bs.get_equipment(eq["id"])
+                skipped += 1
             except Exception:
-                await bs.create_equipment(eq)
-                logger.info(f"Registered equipment: {eq['id']}")
+                try:
+                    await bs.create_equipment(eq)
+                    registered += 1
+                except Exception as e:
+                    logger.warning(f"Failed to register {eq['id']}: {e}")
+                    skipped += 1
+        logger.info(f"Sensors registered: {registered}, skipped: {skipped}")
 
     async def run(self, bs: BuildSimClient):
         """Main gateway loop."""
@@ -174,8 +182,9 @@ class SensorGateway:
                 except Exception as e:
                     logger.warning(f"BuildSim write failed for {sensor.sensor_id}: {e}")
 
-                # Publish to MQTT
-                topic = f"{self.config.mqtt.topic_prefix}/{sensor.level}/{sensor.room}/{sensor.sensor_type}"
+                # Publish to MQTT (sanitize room name - some contain + which is MQTT wildcard)
+                safe_room = sensor.room.replace("+", "_").replace("#", "_")
+                topic = f"{self.config.mqtt.topic_prefix}/{sensor.level}/{safe_room}/{sensor.sensor_type}"
                 payload = json.dumps({
                     "sensor_id": sensor.sensor_id,
                     "room": sensor.room,

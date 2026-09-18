@@ -61,24 +61,29 @@ class FireAgent:
     async def poll_buildsim(self, rooms):
         """Read current sensor values from BuildSim — the canonical observation path.
 
-        Uses GET /api/sensors/{id} for live values, not equipment listing.
+        Uses equipment list to batch-read all sensors efficiently.
         """
-        for room, level in rooms:
-            for stype in ["smoke", "co", "temperature"]:
-                sensor_id = f"{room}-{stype}"
-                try:
-                    sensor = await self.bs.get_sensor(sensor_id)
+        try:
+            equipment = await self.bs.list_equipment()
+            # Index by room
+            for eq in equipment:
+                room_name = eq.get("room", "")
+                if not room_name:
+                    continue
+                for sensor in eq.get("sensors", []):
+                    stype = sensor.get("type", "")
+                    if stype not in ("smoke", "co", "temperature"):
+                        continue
                     value_str = sensor.get("value", "0")
                     try:
                         value = float(value_str)
-                        # Skip initial registration value of 0.0
-                        if value == 0.0 and stype in ("temperature",):
+                        if value == 0.0 and stype == "temperature":
                             continue
-                        self.update_reading(room, stype, value)
+                        self.update_reading(room_name, stype, value)
                     except (ValueError, TypeError):
                         pass
-                except Exception as e:
-                    logger.debug(f"Sensor {sensor_id} not found: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to poll BuildSim: {e}")
 
     def _get_room_readings(self, room):
         readings = {}
@@ -307,6 +312,13 @@ Assess the situation and provide a response plan."""
     async def process_room(self, room, level):
         is_fire, score, features = await self._detect(room)
         if not is_fire:
+            return
+
+        # Skip rooms with negligible readings — avoids LLM calls on noise
+        smoke = features.get("smoke", 0)
+        co = features.get("co", 0)
+        temp = features.get("temperature", 0)
+        if smoke < 2.0 and co < 5.0 and temp < 25.0:
             return
 
         logger.info(f"ANOMALY in {room}: score={score:.3f}, features={features}")
