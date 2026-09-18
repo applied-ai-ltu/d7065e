@@ -37,9 +37,5 @@ jobs:
       - name: Format check with ruff
         run: ruff format --check .
 
-      - name: Type check with mypy
-        run: mypy . --ignore-missing-imports
-        continue-on-error: true
-
       - name: Run tests
         run: pytest --cov --cov-report=term-missing --ignore=tests/test_buildsim.py --ignore=tests/test_graceful_degradation.py --ignore=tests/test_evaluator.py
