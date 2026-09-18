@@ -1,19 +1,14 @@
-"""Verify the BuildSim client can connect."""
+"""Integration tests for BuildSim client."""
 
 import os
-skipci = pytest.mark.skipif(os.getenv("CI") == "true", reason="No BuildSim in CI")
 
 import pytest
+
 from fds.buildsim.client import BuildSimClient
-from fds.config import Config
+
+skipci = pytest.mark.skipif(os.getenv("CI") == "true", reason="No BuildSim in CI")
 
 
-@pytest.fixture
-def config():
-    return Config.from_yaml("configs/config.yaml")
-
-
-@pytest.mark.asyncio
 @skipci
 async def test_health(config):
     async with BuildSimClient(config.buildsim.url) as client:

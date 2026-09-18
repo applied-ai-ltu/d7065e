@@ -46,6 +46,7 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
+per-file-ignores = {"src/fds/run_full.py" = ["E402"], "src/fds/agent/prompts.py" = ["E501"]}
 select = ["E", "F", "I", "W", "UP"]
 
 [tool.pytest.ini_options]

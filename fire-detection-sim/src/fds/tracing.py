@@ -35,6 +35,7 @@ def setup_clearml(project_name="d7065e", task_name="fire-detection"):
     """Initialize ClearML experiment tracking."""
     try:
         from clearml import Task
+
         task = Task.init(
             project_name=project_name,
             task_name=task_name,

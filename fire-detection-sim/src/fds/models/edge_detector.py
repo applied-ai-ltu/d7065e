@@ -5,6 +5,7 @@ No scikit-learn needed.
 """
 
 import logging
+
 import numpy as np
 import onnxruntime as ort
 
@@ -13,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class EdgeDetector:
-
     def __init__(self, model_path="detector.onnx"):
         self.session = ort.InferenceSession(model_path)
         self.input_name = self.session.get_inputs()[0].name
@@ -24,14 +24,19 @@ class EdgeDetector:
         co = readings.get("co", [0.0])
         temp = readings.get("temperature", [0.0])
 
-        features = np.array([[
-            smoke[-1],
-            co[-1],
-            temp[-1],
-            smoke[-1] - smoke[0] if len(smoke) > 1 else 0.0,
-            co[-1] - co[0] if len(co) > 1 else 0.0,
-            temp[-1] - temp[0] if len(temp) > 1 else 0.0,
-        ]], dtype=np.float32)
+        features = np.array(
+            [
+                [
+                    smoke[-1],
+                    co[-1],
+                    temp[-1],
+                    smoke[-1] - smoke[0] if len(smoke) > 1 else 0.0,
+                    co[-1] - co[0] if len(co) > 1 else 0.0,
+                    temp[-1] - temp[0] if len(temp) > 1 else 0.0,
+                ]
+            ],
+            dtype=np.float32,
+        )
 
         outputs = self.session.run(None, {self.input_name: features})
         label = int(outputs[0][0])
@@ -51,7 +56,11 @@ def run_test():
     is_fire, score = detector.predict(fire)
     print(f"Fire:    is_fire={is_fire}, label={score}")
 
-    false_alarm = {"smoke": [0.5, 8.0, 12.0], "co": [2.0, 2.1, 2.0], "temperature": [21.0, 21.0, 21.1]}
+    false_alarm = {
+        "smoke": [0.5, 8.0, 12.0],
+        "co": [2.0, 2.1, 2.0],
+        "temperature": [21.0, 21.0, 21.1],
+    }
     is_fire, score = detector.predict(false_alarm)
     print(f"False:   is_fire={is_fire}, label={score}")
 

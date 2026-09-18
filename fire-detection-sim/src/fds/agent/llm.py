@@ -17,13 +17,13 @@ def _get_tracer():
     """Get tracer lazily so it picks up the provider set by setup_phoenix."""
     try:
         from opentelemetry import trace
+
         return trace.get_tracer("fds.agent.llm")
     except ImportError:
         return None
 
 
 class LLMClient:
-
     def __init__(self, base_url="https://localhost:30400", api_key="", model="qwen2.5-14b"):
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -57,7 +57,9 @@ class LLMClient:
                     "llm.model": self.model,
                     "llm.temperature": temperature,
                     "llm.message_count": len(messages),
-                    "llm.system_prompt": messages[0]["content"][:200] if messages and messages[0]["role"] == "system" else "",
+                    "llm.system_prompt": messages[0]["content"][:200]
+                    if messages and messages[0]["role"] == "system"
+                    else "",
                 },
             ) as span:
                 start = time.time()

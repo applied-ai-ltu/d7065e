@@ -1,7 +1,8 @@
 """Async client for the BuildSim REST API."""
 
-import httpx
 from typing import Any
+
+import httpx
 
 
 class BuildSimClient:
@@ -108,10 +109,13 @@ class BuildSimClient:
         return await self._get(f"/api/sensors/{sensor_id}")
 
     async def set_sensor_value(self, sensor_id: str, value: str, data_type: str = "text") -> Any:
-        return await self._put(f"/api/sensors/{sensor_id}/value", {
-            "value": value,
-            "data_type": data_type,
-        })
+        return await self._put(
+            f"/api/sensors/{sensor_id}/value",
+            {
+                "value": value,
+                "data_type": data_type,
+            },
+        )
 
     # -- actuators --
 

@@ -19,7 +19,6 @@ class EvacuationRoute:
 
 
 class EvacuationPlanner:
-
     def __init__(self):
         self._nodes = {}
         self._node_by_name = {}
@@ -106,21 +105,25 @@ class EvacuationPlanner:
             if exit_id in dist and dist[exit_id] < float("inf"):
                 path_ids = self._reconstruct(prev, exit_id)
                 path_rooms = [self._nodes[nid]["name"] for nid in path_ids]
-                routes.append(EvacuationRoute(
-                    from_room=from_room,
-                    to_exit=exit_name,
-                    path_rooms=path_rooms,
-                    total_weight=round(dist[exit_id], 1),
-                    is_safe=True,
-                ))
+                routes.append(
+                    EvacuationRoute(
+                        from_room=from_room,
+                        to_exit=exit_name,
+                        path_rooms=path_rooms,
+                        total_weight=round(dist[exit_id], 1),
+                        is_safe=True,
+                    )
+                )
             else:
-                routes.append(EvacuationRoute(
-                    from_room=from_room,
-                    to_exit=exit_name,
-                    path_rooms=[],
-                    total_weight=float("inf"),
-                    is_safe=False,
-                ))
+                routes.append(
+                    EvacuationRoute(
+                        from_room=from_room,
+                        to_exit=exit_name,
+                        path_rooms=[],
+                        total_weight=float("inf"),
+                        is_safe=False,
+                    )
+                )
 
         routes.sort(key=lambda r: r.total_weight)
         return routes
@@ -133,16 +136,16 @@ class EvacuationPlanner:
                 result = await bs.get_route(from_room_id, exit_id, level=level)
                 path = result.get("path", [])
                 path_rooms = [p["name"] for p in path]
-                total = sum(
-                    p.get("weight", 0) for p in path
-                ) if path else float("inf")
-                routes.append(EvacuationRoute(
-                    from_room=path[0]["name"] if path else "?",
-                    to_exit=path[-1]["name"] if path else "?",
-                    path_rooms=path_rooms,
-                    total_weight=round(total, 1),
-                    is_safe=True,
-                ))
+                total = sum(p.get("weight", 0) for p in path) if path else float("inf")
+                routes.append(
+                    EvacuationRoute(
+                        from_room=path[0]["name"] if path else "?",
+                        to_exit=path[-1]["name"] if path else "?",
+                        path_rooms=path_rooms,
+                        total_weight=round(total, 1),
+                        is_safe=True,
+                    )
+                )
             except Exception as e:
                 logger.warning(f"Route API failed for exit {exit_id}: {e}")
         routes.sort(key=lambda r: r.total_weight)

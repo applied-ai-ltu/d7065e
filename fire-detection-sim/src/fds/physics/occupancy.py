@@ -5,7 +5,6 @@ knows how many people are in danger and where to direct them.
 """
 
 import logging
-import math
 import random
 from datetime import datetime
 

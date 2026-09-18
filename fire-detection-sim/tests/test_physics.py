@@ -1,6 +1,5 @@
 """Test the physics engine."""
 
-import time
 from fds.physics.engine import PhysicsEngine
 
 

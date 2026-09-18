@@ -11,6 +11,7 @@ Architecture (matches reference):
 
 # Initialize tracing BEFORE any other imports that touch OpenTelemetry
 from fds.tracing import setup_phoenix
+
 _tracer_provider = setup_phoenix("d7065e")
 
 import asyncio
@@ -20,21 +21,22 @@ import math
 import os
 import time
 
+import uvicorn
+
+from fds.agent.agent import FireAgent
+from fds.api.control import app as control_app
+from fds.api.control import sim
 from fds.buildsim.client import BuildSimClient
 from fds.config import Config
-from fds.api.control import app as control_app, sim
-import uvicorn
-from fds.secrets import get_secrets
-from fds.physics.engine import PhysicsEngine
-from fds.physics.sensor_gateway import SensorGateway, SensorConfig
-from fds.physics.actuator_process import ActuatorProcess, ActuatorConfig
-from fds.physics.occupancy import OccupancySimulator
 from fds.models.detector import FireDetector
-from fds.models.spread import FireSpreadPredictor
 from fds.models.evacuation import EvacuationPlanner
-from fds.agent.agent import FireAgent
-from fds.pipeline.schema import init_database
+from fds.models.spread import FireSpreadPredictor
+from fds.physics.engine import PhysicsEngine
+from fds.physics.occupancy import OccupancySimulator
+from fds.physics.sensor_gateway import SensorConfig, SensorGateway
 from fds.pipeline.consumer import PipelineConsumer
+from fds.pipeline.schema import init_database
+from fds.secrets import get_secrets
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -68,7 +70,7 @@ async def physics_loop(engine, bs, occupancy_sim, dt=2.0):
         except Exception:
             pass
 
-        sim_hour += (dt / 60.0)
+        sim_hour += dt / 60.0
         if sim_hour >= 24:
             sim_hour = 7.0
 
@@ -86,8 +88,10 @@ async def main():
     config.database.password = secrets.get("db_password", "")
 
     await init_database(
-        config.database.host, config.database.port,
-        config.database.user, config.database.password,
+        config.database.host,
+        config.database.port,
+        config.database.user,
+        config.database.password,
         config.database.database,
     )
 
@@ -125,7 +129,7 @@ async def main():
                 for other_name, other_pos in node_positions.items():
                     if other_name == name:
                         continue
-                    dist = math.sqrt((pos[0] - other_pos[0])**2 + (pos[1] - other_pos[1])**2)
+                    dist = math.sqrt((pos[0] - other_pos[0]) ** 2 + (pos[1] - other_pos[1]) ** 2)
                     if dist < 50:
                         neighbors.append((other_name, dist))
                 engine.set_neighbors(name, neighbors)
@@ -180,18 +184,20 @@ async def main():
                     ("co", "ppm", 0.5, 3.0, 0.002, 0.005),
                     ("temperature", "C", 0.15, 1.0, 0.0005, 0.002),
                 ]:
-                    gateway.add_sensor(SensorConfig(
-                        sensor_id=f"{level}-{room_name}-{stype}",
-                        equipment_id=eq_id,
-                        room=room_name,
-                        level=level,
-                        sensor_type=stype,
-                        unit=unit,
-                        noise_sigma=noise,
-                        lag_seconds=lag,
-                        drift_rate=drift,
-                        stuck_probability=stuck,
-                    ))
+                    gateway.add_sensor(
+                        SensorConfig(
+                            sensor_id=f"{level}-{room_name}-{stype}",
+                            equipment_id=eq_id,
+                            room=room_name,
+                            level=level,
+                            sensor_type=stype,
+                            unit=unit,
+                            noise_sigma=noise,
+                            lag_seconds=lag,
+                            drift_rate=drift,
+                            stuck_probability=stuck,
+                        )
+                    )
 
         logger.info(f"Sensor gateway: {len(gateway.sensors)} sensors across {len(LEVELS)} floors")
 
@@ -208,15 +214,26 @@ async def main():
                     await bs.get_equipment(spr_eq)
                 except Exception:
                     try:
-                        await bs.create_equipment({
-                        "id": spr_eq,
-                        "name": f"Sprinkler ({room_name})",
-                        "type": "actuator", "category": "fire_response",
-                        "level": level, "room": room_name, "status": "running",
-                        "sensors": [],
-                        "actuators": [{"id": f"{level}-{room_name}-sprinkler", "name": "Sprinkler",
-                                       "type": "sprinkler", "state": "off"}],
-                        })
+                        await bs.create_equipment(
+                            {
+                                "id": spr_eq,
+                                "name": f"Sprinkler ({room_name})",
+                                "type": "actuator",
+                                "category": "fire_response",
+                                "level": level,
+                                "room": room_name,
+                                "status": "running",
+                                "sensors": [],
+                                "actuators": [
+                                    {
+                                        "id": f"{level}-{room_name}-sprinkler",
+                                        "name": "Sprinkler",
+                                        "type": "sprinkler",
+                                        "state": "off",
+                                    }
+                                ],
+                            }
+                        )
                     except Exception as e:
                         logger.debug(f"Sprinkler reg skip: {e}")
                 actuator_count += 1
@@ -228,15 +245,26 @@ async def main():
                         await bs.get_equipment(door_eq)
                     except Exception:
                         try:
-                            await bs.create_equipment({
-                            "id": door_eq,
-                            "name": f"Fire door ({room_name})",
-                            "type": "actuator", "category": "fire_response",
-                            "level": level, "room": room_name, "status": "running",
-                            "sensors": [],
-                            "actuators": [{"id": f"{level}-{room_name}-door", "name": "Fire door",
-                                           "type": "fire_door", "state": "closed_locked"}],
-                            })
+                            await bs.create_equipment(
+                                {
+                                    "id": door_eq,
+                                    "name": f"Fire door ({room_name})",
+                                    "type": "actuator",
+                                    "category": "fire_response",
+                                    "level": level,
+                                    "room": room_name,
+                                    "status": "running",
+                                    "sensors": [],
+                                    "actuators": [
+                                        {
+                                            "id": f"{level}-{room_name}-door",
+                                            "name": "Fire door",
+                                            "type": "fire_door",
+                                            "state": "closed_locked",
+                                        }
+                                    ],
+                                }
+                            )
                         except Exception as e:
                             logger.debug(f"Door reg skip: {e}")
                     actuator_count += 1
@@ -252,6 +280,7 @@ async def main():
             detector.load("models/detector.pkl")
         except FileNotFoundError:
             from fds.models.trainer import train_detector
+
             detector = train_detector()
 
         # --- Spread + Evacuation (combined graph, all floors) ---
@@ -265,7 +294,8 @@ async def main():
         exit_names = []
         for level in LEVELS:
             level_corridors = [
-                n for n in combined_graph["nodes"]
+                n
+                for n in combined_graph["nodes"]
                 if n["name"] in all_rooms_by_level.get(level, [])
                 and all_room_types.get(n["name"]) == "corridor"
             ]
@@ -292,7 +322,8 @@ async def main():
 
         # --- Agent (reads from BuildSim, building-wide response) ---
         agent = FireAgent(
-            bs=bs, detector=detector,
+            bs=bs,
+            detector=detector,
             spread_predictor=spread,
             evacuation_planner=evac,
             llm_url=config.llm.base_url,
@@ -312,14 +343,16 @@ async def main():
         print("Fire Detection System — Full Building")
         print("=" * 60)
         print(f"Floors: {LEVELS}")
-        print(f"Rooms: {total_rooms} ({sum(len(v) for v in all_rooms_by_level.values())} monitored)")
+        print(
+            f"Rooms: {total_rooms} ({sum(len(v) for v in all_rooms_by_level.values())} monitored)"
+        )
         print(f"Sensors: {len(gateway.sensors)} (smoke + CO + temperature per room)")
         print(f"Actuators: {actuator_count} registered in BuildSim")
         print(f"Exits: {len(exit_names)}")
         print(f"Agent model: {config.llm.model} (tick=10s)")
-        print(f"Control API: http://localhost:8089/docs")
+        print("Control API: http://localhost:8089/docs")
         print(f"BuildSim: {config.buildsim.url}")
-        print(f"Press Ctrl+C to stop")
+        print("Press Ctrl+C to stop")
         print("=" * 60)
 
         tasks = [

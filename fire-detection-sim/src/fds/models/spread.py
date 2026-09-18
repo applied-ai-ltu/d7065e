@@ -1,7 +1,7 @@
 """Fire spread prediction using spatial room adjacency."""
 
-import math
 import logging
+import math
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,6 @@ class RoomRisk:
 
 
 class FireSpreadPredictor:
-
     def __init__(self, spread_radius=50.0):
         self.spread_radius = spread_radius
         self._rooms = {}
@@ -58,13 +57,15 @@ class FireSpreadPredictor:
             risk = max(0.0, min(1.0, risk))
 
             if risk > 0.1:
-                at_risk.append(RoomRisk(
-                    room=room_name,
-                    room_id=self._rooms[room_name],
-                    level=fire_level,
-                    distance=round(dist, 1),
-                    risk_score=round(risk, 3),
-                ))
+                at_risk.append(
+                    RoomRisk(
+                        room=room_name,
+                        room_id=self._rooms[room_name],
+                        level=fire_level,
+                        distance=round(dist, 1),
+                        risk_score=round(risk, 3),
+                    )
+                )
 
         at_risk.sort(key=lambda r: r.risk_score, reverse=True)
         return at_risk

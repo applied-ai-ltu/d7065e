@@ -1,7 +1,7 @@
 """Test CO sensor value generation."""
 
-from fds.sensors.co import COSensor
 from fds.config import Config
+from fds.sensors.co import COSensor
 
 
 def make_sensor(**kwargs):

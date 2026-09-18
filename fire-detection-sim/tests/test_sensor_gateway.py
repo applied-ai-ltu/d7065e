@@ -1,8 +1,8 @@
 """Test sensor degradation."""
 
-from fds.physics.engine import PhysicsEngine
-from fds.physics.sensor_gateway import SensorGateway, SensorConfig
 from fds.config import Config
+from fds.physics.engine import PhysicsEngine
+from fds.physics.sensor_gateway import SensorConfig, SensorGateway
 
 
 def test_noise_adds_variation():
@@ -12,14 +12,18 @@ def test_noise_adds_variation():
     config = Config()
     gw = SensorGateway(config, engine)
     sensor = SensorConfig(
-        sensor_id="test", equipment_id="test-eq",
-        room="A109", level="level0",
-        sensor_type="temperature", unit="C",
+        sensor_id="test",
+        equipment_id="test-eq",
+        room="A109",
+        level="level0",
+        sensor_type="temperature",
+        unit="C",
         noise_sigma=1.0,
     )
     gw.add_sensor(sensor)
 
     import time
+
     now = time.time()
     values = [gw._degrade(sensor, 21.0, now + i) for i in range(50)]
     values = [v for v in values if v is not None]
@@ -33,9 +37,12 @@ def test_stuck_sensor_freezes():
     config = Config()
     gw = SensorGateway(config, engine)
     sensor = SensorConfig(
-        sensor_id="stuck", equipment_id="test-eq",
-        room="A109", level="level0",
-        sensor_type="temperature", unit="C",
+        sensor_id="stuck",
+        equipment_id="test-eq",
+        room="A109",
+        level="level0",
+        sensor_type="temperature",
+        unit="C",
         stuck_probability=1.0,
     )
     gw.sensors.append(sensor)
@@ -44,6 +51,7 @@ def test_stuck_sensor_freezes():
     gw._lag_buffers["stuck"] = []
 
     import time
+
     now = time.time()
     val1 = gw._degrade(sensor, 21.0, now)
     val2 = gw._degrade(sensor, 25.0, now + 1)

@@ -4,7 +4,6 @@ from fds.actuators.base import BaseActuator
 
 
 class FireDoorActuator(BaseActuator):
-
     def __init__(self, **kwargs):
         super().__init__(actuator_type="fire_door", initial_state="closed_locked", **kwargs)
 

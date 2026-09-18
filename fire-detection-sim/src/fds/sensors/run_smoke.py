@@ -24,11 +24,11 @@ async def main():
     )
 
     async with BuildSimClient(config.buildsim.url) as bs:
-        print(f"Smoke sensor starting in room A109")
-        print(f"Fire will start at t=30s")
+        print("Smoke sensor starting in room A109")
+        print("Fire will start at t=30s")
         print(f"MQTT topic: {sensor.mqtt_topic}")
-        print(f"Watch BuildSim: http://localhost:30909")
-        print(f"Press Ctrl+C to stop")
+        print("Watch BuildSim: http://localhost:30909")
+        print("Press Ctrl+C to stop")
         try:
             await sensor.run(bs)
         except KeyboardInterrupt:

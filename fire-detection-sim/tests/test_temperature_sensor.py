@@ -1,7 +1,7 @@
 """Test temperature sensor value generation."""
 
-from fds.sensors.temperature import TemperatureSensor
 from fds.config import Config
+from fds.sensors.temperature import TemperatureSensor
 
 
 def make_sensor(**kwargs):
@@ -19,7 +19,9 @@ def make_sensor(**kwargs):
 def test_stable_without_fire():
     sensor = make_sensor()
     values = [sensor.generate_value(t) for t in range(100)]
-    assert all(15 < v < 25 for v in values), f"Temperature unstable: min={min(values)}, max={max(values)}"
+    assert all(15 < v < 25 for v in values), (
+        f"Temperature unstable: min={min(values)}, max={max(values)}"
+    )
 
 
 def test_fire_raises_temperature():

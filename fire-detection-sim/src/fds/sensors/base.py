@@ -2,8 +2,8 @@
 
 import asyncio
 import json
-import time
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -66,24 +66,28 @@ class BaseSensor(ABC):
             await bs.get_equipment(self.equipment_id)
             logger.info(f"Equipment {self.equipment_id} already exists")
         except Exception:
-            await bs.create_equipment({
-                "id": self.equipment_id,
-                "name": f"{self.sensor_type} sensor ({self.room})",
-                "type": "sensor",
-                "category": "fire_detection",
-                "level": self.level,
-                "room": self.room,
-                "status": "running",
-                "sensors": [{
-                    "id": self.sensor_id,
-                    "name": self.sensor_type.capitalize(),
-                    "type": self.sensor_type,
-                    "data_type": "text",
-                    "unit": self.unit,
-                    "value": "0.0",
-                }],
-                "actuators": [],
-            })
+            await bs.create_equipment(
+                {
+                    "id": self.equipment_id,
+                    "name": f"{self.sensor_type} sensor ({self.room})",
+                    "type": "sensor",
+                    "category": "fire_detection",
+                    "level": self.level,
+                    "room": self.room,
+                    "status": "running",
+                    "sensors": [
+                        {
+                            "id": self.sensor_id,
+                            "name": self.sensor_type.capitalize(),
+                            "type": self.sensor_type,
+                            "data_type": "text",
+                            "unit": self.unit,
+                            "value": "0.0",
+                        }
+                    ],
+                    "actuators": [],
+                }
+            )
             logger.info(f"Registered {self.sensor_type} sensor: {self.sensor_id} in {self.room}")
 
     async def run(self, bs: BuildSimClient):
@@ -112,15 +116,17 @@ class BaseSensor(ABC):
                 timestamp=time.time(),
             )
 
-            payload = json.dumps({
-                "sensor_id": reading.sensor_id,
-                "room": reading.room,
-                "level": reading.level,
-                "type": reading.sensor_type,
-                "value": reading.value,
-                "unit": reading.unit,
-                "timestamp": reading.timestamp,
-            })
+            payload = json.dumps(
+                {
+                    "sensor_id": reading.sensor_id,
+                    "room": reading.room,
+                    "level": reading.level,
+                    "type": reading.sensor_type,
+                    "value": reading.value,
+                    "unit": reading.unit,
+                    "timestamp": reading.timestamp,
+                }
+            )
             self._mqtt.publish(self.mqtt_topic, payload, qos=1)
 
             try:

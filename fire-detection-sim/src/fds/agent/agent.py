@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import asyncpg
 
@@ -16,14 +16,13 @@ from fds.agent.llm import LLMClient
 from fds.agent.prompts import FIRE_AGENT_SYSTEM
 from fds.buildsim.client import BuildSimClient
 from fds.models.detector import FireDetector
-from fds.models.spread import FireSpreadPredictor
 from fds.models.evacuation import EvacuationPlanner
+from fds.models.spread import FireSpreadPredictor
 
 logger = logging.getLogger(__name__)
 
 
 class FireAgent:
-
     def __init__(
         self,
         bs: BuildSimClient,
@@ -103,19 +102,21 @@ class FireAgent:
         return is_fire, score, features
 
     async def _plan(self, room, level, features, risk_rooms, evac_routes):
-        risk_str = ", ".join([f"{r.room} (risk={r.risk_score})" for r in risk_rooms[:5]]) or "none nearby"
+        risk_str = (
+            ", ".join([f"{r.room} (risk={r.risk_score})" for r in risk_rooms[:5]]) or "none nearby"
+        )
         route_str = ""
         if evac_routes:
             best = evac_routes[0]
             route_str = f"Best route: {' -> '.join(best.path_rooms)} (distance={best.total_weight})"
 
         prompt = f"""Current sensor readings for room {room} on {level}:
-- Smoke: {features.get('smoke', 0):.1f} %obs/m
-- CO: {features.get('co', 0):.1f} ppm
-- Temperature: {features.get('temperature', 0):.1f} C
-- Smoke rate of change: {features.get('smoke_rate', 0):.2f}
-- CO rate of change: {features.get('co_rate', 0):.2f}
-- Temperature rate of change: {features.get('temp_rate', 0):.2f}
+- Smoke: {features.get("smoke", 0):.1f} %obs/m
+- CO: {features.get("co", 0):.1f} ppm
+- Temperature: {features.get("temperature", 0):.1f} C
+- Smoke rate of change: {features.get("smoke_rate", 0):.2f}
+- CO rate of change: {features.get("co_rate", 0):.2f}
+- Temperature rate of change: {features.get("temp_rate", 0):.2f}
 
 Rooms at risk from fire spread: {risk_str}
 Evacuation: {route_str}
@@ -125,7 +126,7 @@ Assess the situation and provide a response plan."""
 
         try:
             plan = await self.llm.generate_json(prompt, system=FIRE_AGENT_SYSTEM)
-            logger.info(f"LLM plan received")
+            logger.info("LLM plan received")
             return plan
         except Exception as e:
             logger.error(f"LLM planning failed: {e}")
@@ -143,7 +144,7 @@ Assess the situation and provide a response plan."""
             "assessment": {
                 "is_fire": is_fire,
                 "confidence": confidence,
-                "reasoning": "Fallback: rule-based (LLM unavailable)"
+                "reasoning": "Fallback: rule-based (LLM unavailable)",
             },
             "affected_room": room,
             "affected_level": level,
@@ -153,11 +154,13 @@ Assess the situation and provide a response plan."""
                 "doors": [{"room": room, "action": "unlock"}] if is_fire else [],
                 "evacuate": is_fire,
             },
-            "alerts": [{
-                "severity": "critical" if is_fire else "warning",
-                "title": f"{'Fire' if is_fire else 'Anomaly'} in {room}",
-                "message": f"Smoke={smoke:.1f}, CO={co:.1f} (fallback mode)"
-            }],
+            "alerts": [
+                {
+                    "severity": "critical" if is_fire else "warning",
+                    "title": f"{'Fire' if is_fire else 'Anomaly'} in {room}",
+                    "message": f"Smoke={smoke:.1f}, CO={co:.1f} (fallback mode)",
+                }
+            ],
         }
 
     async def _verify(self, plan):
@@ -187,14 +190,18 @@ Assess the situation and provide a response plan."""
         # Room appearances: red=fire, orange=risk, green=safe exits
         appearances = [{"level": level, "room": room, "color": "#ff0000", "brightness": 0.8}]
         for r in risk_rooms[:5]:
-            appearances.append({"level": r.level, "room": r.room, "color": "#ff8800", "brightness": 0.6})
+            appearances.append(
+                {"level": r.level, "room": r.room, "color": "#ff8800", "brightness": 0.6}
+            )
 
         # Mark evacuation exit rooms green
         if evac_routes:
             for route in evac_routes[:2]:
                 if route.path_rooms:
                     exit_room = route.path_rooms[-1]
-                    appearances.append({"level": level, "room": exit_room, "color": "#00cc00", "brightness": 0.7})
+                    appearances.append(
+                        {"level": level, "room": exit_room, "color": "#00cc00", "brightness": 0.7}
+                    )
 
         try:
             await self.bs.set_room_appearance(appearances)
@@ -203,15 +210,19 @@ Assess the situation and provide a response plan."""
 
         # Fire effect
         try:
-            await self.bs.set_effects([{
-                "id": f"fire-{room}",
-                "type": "fire",
-                "label": f"Fire in {room}",
-                "level": level,
-                "room": room,
-                "radius": 3.0,
-                "intensity": assessment.get("confidence", 0.8),
-            }])
+            await self.bs.set_effects(
+                [
+                    {
+                        "id": f"fire-{room}",
+                        "type": "fire",
+                        "label": f"Fire in {room}",
+                        "level": level,
+                        "room": room,
+                        "radius": 3.0,
+                        "intensity": assessment.get("confidence", 0.8),
+                    }
+                ]
+            )
         except Exception as e:
             logger.warning(f"Failed to set effects: {e}")
 
@@ -220,15 +231,17 @@ Assess the situation and provide a response plan."""
         if alerts:
             bs_alerts = []
             for alert in alerts:
-                bs_alerts.append({
-                    "id": f"alert-{room}-{int(time.time())}",
-                    "severity": alert.get("severity", "warning"),
-                    "title": alert.get("title", "Fire alert"),
-                    "message": alert.get("message", ""),
-                    "level": level,
-                    "room": room,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
+                bs_alerts.append(
+                    {
+                        "id": f"alert-{room}-{int(time.time())}",
+                        "severity": alert.get("severity", "warning"),
+                        "title": alert.get("title", "Fire alert"),
+                        "message": alert.get("message", ""),
+                        "level": level,
+                        "room": room,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
             try:
                 await self.bs.set_alerts(bs_alerts)
             except Exception as e:
@@ -240,15 +253,17 @@ Assess the situation and provide a response plan."""
             for r in risk_rooms[:5]:
                 pos = self.spread._room_positions.get(r.room)
                 if pos:
-                    coverage.append({
-                        "id": f"risk-{r.room}",
-                        "type": "sphere",
-                        "level": level,
-                        "room": r.room,
-                        "position": list(pos),
-                        "radius": r.risk_score * 5.0,
-                        "color": "#ff880088",
-                    })
+                    coverage.append(
+                        {
+                            "id": f"risk-{r.room}",
+                            "type": "sphere",
+                            "level": level,
+                            "room": r.room,
+                            "position": list(pos),
+                            "radius": r.risk_score * 5.0,
+                            "color": "#ff880088",
+                        }
+                    )
             if coverage:
                 await self.bs.set_coverage(coverage)
         except Exception as e:
@@ -265,7 +280,9 @@ Assess the situation and provide a response plan."""
                 except Exception as e:
                     logger.warning(f"Failed to display route: {e}")
 
-        logger.info(f"FIRE RESPONSE executed for {room} | risk_rooms={[r.room for r in risk_rooms[:5]]}")
+        logger.info(
+            f"FIRE RESPONSE executed for {room} | risk_rooms={[r.room for r in risk_rooms[:5]]}"
+        )
 
         # Log to database
         severity = "critical" if assessment.get("confidence", 0) >= 0.7 else "warning"
@@ -298,16 +315,23 @@ Assess the situation and provide a response plan."""
             logger.warning(f"Failed to log fire event: {e}")
 
     def _log_episode(self, room, features, plan, risk_rooms, evac_routes, verified, issues):
-        self._episode_log.append({
-            "timestamp": time.time(),
-            "room": room,
-            "features": features,
-            "plan": plan,
-            "risk_rooms": [{"room": r.room, "risk": r.risk_score, "dist": r.distance} for r in risk_rooms],
-            "evacuation": [{"to": r.to_exit, "weight": r.total_weight, "safe": r.is_safe} for r in evac_routes],
-            "verified": verified,
-            "issues": issues,
-        })
+        self._episode_log.append(
+            {
+                "timestamp": time.time(),
+                "room": room,
+                "features": features,
+                "plan": plan,
+                "risk_rooms": [
+                    {"room": r.room, "risk": r.risk_score, "dist": r.distance} for r in risk_rooms
+                ],
+                "evacuation": [
+                    {"to": r.to_exit, "weight": r.total_weight, "safe": r.is_safe}
+                    for r in evac_routes
+                ],
+                "verified": verified,
+                "issues": issues,
+            }
+        )
 
     async def process_room(self, room, level):
         is_fire, score, features = await self._detect(room)
@@ -341,13 +365,19 @@ Assess the situation and provide a response plan."""
         valid_routes = [r for r in evac_routes if r.total_weight < float("inf")]
 
         if valid_routes:
-            logger.info(f"Evacuation: best route to {valid_routes[0].to_exit} via {valid_routes[0].path_rooms[:5]} ({valid_routes[0].total_weight})")
+            logger.info(
+                f"Evacuation: best route to {valid_routes[0].to_exit} "
+                f"via {valid_routes[0].path_rooms[:5]} ({valid_routes[0].total_weight})"
+            )
         else:
             # Fallback: try without any blocked rooms
             evac_routes = self.evac.find_routes(room, blocked_rooms=None)
             valid_routes = [r for r in evac_routes if r.total_weight < float("inf")]
             if valid_routes:
-                logger.info(f"Evacuation (unblocked): best route to {valid_routes[0].to_exit} ({valid_routes[0].total_weight})")
+                logger.info(
+                    f"Evacuation (unblocked): best route to "
+                    f"{valid_routes[0].to_exit} ({valid_routes[0].total_weight})"
+                )
             else:
                 logger.warning("No evacuation routes found")
 

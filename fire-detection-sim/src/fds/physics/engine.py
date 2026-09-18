@@ -8,9 +8,8 @@ This is the ONLY source of truth. Everything else samples from it.
 
 import logging
 import math
-import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RoomState:
     """Ground truth state for one room."""
+
     name: str
     level: str
     temperature: float = 21.0
@@ -133,7 +133,7 @@ class PhysicsEngine:
                 ramp = 1.0 / (1.0 + math.exp(-0.1 * (elapsed - 20)))
                 heat_fire = self.fire_heat_rate * room.fire_intensity * ramp * dt
                 if room.sprinkler_active:
-                    heat_fire *= (1.0 - self.sprinkler_effectiveness)
+                    heat_fire *= 1.0 - self.sprinkler_effectiveness
 
             room.temperature += heat_fire + heat_occupants - delta_wall
 
@@ -162,7 +162,9 @@ class PhysicsEngine:
                         factor = max(0.0, 1.0 - (distance / 60.0))
                         if neighbor_name not in propagation:
                             propagation[neighbor_name] = {"temp": 0, "smoke": 0, "co": 0}
-                        propagation[neighbor_name]["temp"] += 0.15 * factor * room.fire_intensity * dt
+                        propagation[neighbor_name]["temp"] += (
+                            0.15 * factor * room.fire_intensity * dt
+                        )
                         propagation[neighbor_name]["smoke"] += 0.1 * factor * room.smoke * dt
                         propagation[neighbor_name]["co"] += 0.05 * factor * room.co * dt
 

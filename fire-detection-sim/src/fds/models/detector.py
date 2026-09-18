@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 class FireDetector:
-
     def __init__(self, contamination=0.05, n_estimators=200):
         self.model = IsolationForest(
             contamination=contamination,
@@ -98,17 +97,20 @@ class FireDetector:
     def export_onnx(self, path):
         """Export to ONNX for edge deployment."""
         try:
+            import onnx
             from skl2onnx import convert_sklearn
             from skl2onnx.common.data_types import FloatTensorType
-            import onnx
 
             initial_type = [("features", FloatTensorType([None, len(self.feature_names)]))]
 
             # Build a pipeline with scaler + model
             from sklearn.pipeline import Pipeline
+
             pipe = Pipeline([("scaler", self.scaler), ("detector", self.model)])
 
-            onnx_model = convert_sklearn(pipe, initial_types=initial_type, target_opset={"": 17, "ai.onnx.ml": 3})
+            onnx_model = convert_sklearn(
+                pipe, initial_types=initial_type, target_opset={"": 17, "ai.onnx.ml": 3}
+            )
             path = Path(path)
             path.parent.mkdir(parents=True, exist_ok=True)
             onnx.save_model(onnx_model, str(path))

@@ -7,23 +7,20 @@ Proves the system works when the LLM is unavailable:
 - The system doesn't crash
 """
 
-import asyncio
-import json
 import logging
 import os
-import time
+
 import pytest
 
+from fds.agent.agent import FireAgent
 from fds.buildsim.client import BuildSimClient
 from fds.config import Config
-from fds.secrets import get_secrets
-from fds.physics.engine import PhysicsEngine
-from fds.physics.sensor_gateway import SensorGateway, SensorConfig
-from fds.physics.actuator_process import ActuatorProcess, ActuatorConfig
 from fds.models.detector import FireDetector
-from fds.models.spread import FireSpreadPredictor
 from fds.models.evacuation import EvacuationPlanner
-from fds.agent.agent import FireAgent
+from fds.models.spread import FireSpreadPredictor
+from fds.physics.engine import PhysicsEngine
+from fds.physics.sensor_gateway import SensorConfig, SensorGateway
+from fds.secrets import get_secrets
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,21 +50,39 @@ async def test_fallback_agent_detects_and_responds():
 
     # Sensor gateway (read truth, degrade)
     gateway = SensorGateway(config, engine, interval=2.0)
-    gateway.add_sensor(SensorConfig(
-        sensor_id=f"{room}-smoke", equipment_id=f"test-sensors-{room}",
-        room=room, level=level, sensor_type="smoke", unit="%obs/m",
-        noise_sigma=0.3,
-    ))
-    gateway.add_sensor(SensorConfig(
-        sensor_id=f"{room}-co", equipment_id=f"test-sensors-{room}",
-        room=room, level=level, sensor_type="co", unit="ppm",
-        noise_sigma=0.5,
-    ))
-    gateway.add_sensor(SensorConfig(
-        sensor_id=f"{room}-temperature", equipment_id=f"test-sensors-{room}",
-        room=room, level=level, sensor_type="temperature", unit="C",
-        noise_sigma=0.15,
-    ))
+    gateway.add_sensor(
+        SensorConfig(
+            sensor_id=f"{room}-smoke",
+            equipment_id=f"test-sensors-{room}",
+            room=room,
+            level=level,
+            sensor_type="smoke",
+            unit="%obs/m",
+            noise_sigma=0.3,
+        )
+    )
+    gateway.add_sensor(
+        SensorConfig(
+            sensor_id=f"{room}-co",
+            equipment_id=f"test-sensors-{room}",
+            room=room,
+            level=level,
+            sensor_type="co",
+            unit="ppm",
+            noise_sigma=0.5,
+        )
+    )
+    gateway.add_sensor(
+        SensorConfig(
+            sensor_id=f"{room}-temperature",
+            equipment_id=f"test-sensors-{room}",
+            room=room,
+            level=level,
+            sensor_type="temperature",
+            unit="C",
+            noise_sigma=0.15,
+        )
+    )
 
     # Detector
     detector = FireDetector()
@@ -75,6 +90,7 @@ async def test_fallback_agent_detects_and_responds():
         detector.load("models/detector.pkl")
     except FileNotFoundError:
         from fds.models.trainer import train_detector
+
         detector = train_detector()
 
     # Spread + evac (minimal)
@@ -96,7 +112,8 @@ async def test_fallback_agent_detects_and_responds():
 
         # Create agent with BROKEN LLM — forces fallback
         agent = FireAgent(
-            bs=bs, detector=detector,
+            bs=bs,
+            detector=detector,
             spread_predictor=spread,
             evacuation_planner=evac,
             llm_url="https://192.168.68.67:99999",  # Deliberately broken
@@ -134,7 +151,7 @@ async def test_fallback_agent_detects_and_responds():
         doors = plan.get("plan", {}).get("doors", [])
         assert len(doors) > 0, "No doors in fallback plan"
 
-        logger.info(f"GRACEFUL DEGRADATION TEST PASSED")
+        logger.info("GRACEFUL DEGRADATION TEST PASSED")
         logger.info(f"  Fire detected: {assessment.get('is_fire')}")
         logger.info(f"  Confidence: {assessment.get('confidence')}")
         logger.info(f"  Reasoning: {assessment.get('reasoning')}")
@@ -159,6 +176,7 @@ async def test_fallback_rejects_false_alarm():
         detector.load("models/detector.pkl")
     except FileNotFoundError:
         from fds.models.trainer import train_detector
+
         detector = train_detector()
 
     spread = FireSpreadPredictor()
@@ -166,7 +184,8 @@ async def test_fallback_rejects_false_alarm():
 
     async with BuildSimClient(config.buildsim.url) as bs:
         agent = FireAgent(
-            bs=bs, detector=detector,
+            bs=bs,
+            detector=detector,
             spread_predictor=spread,
             evacuation_planner=evac,
             llm_url="https://192.168.68.67:99999",

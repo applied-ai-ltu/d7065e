@@ -2,9 +2,9 @@
 
 from fds.models.detector import FireDetector
 from fds.models.trainer import (
-    generate_normal_windows,
-    generate_fire_windows,
     generate_false_alarm_windows,
+    generate_fire_windows,
+    generate_normal_windows,
 )
 
 
@@ -42,7 +42,9 @@ def test_handles_false_alarm_smoke():
 
     false = generate_false_alarm_windows(n_windows=20)
     incorrectly_flagged = sum(1 for w in false if detector.predict(w)[0])
-    assert incorrectly_flagged < 10, f"Too many false alarms flagged as fire: {incorrectly_flagged}/20"
+    assert incorrectly_flagged < 10, (
+        f"Too many false alarms flagged as fire: {incorrectly_flagged}/20"
+    )
 
 
 def test_save_load(tmp_path):

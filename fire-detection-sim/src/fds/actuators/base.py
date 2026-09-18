@@ -1,6 +1,5 @@
 """Base actuator with BuildSim state reporting."""
 
-import asyncio
 import logging
 
 from fds.buildsim.client import BuildSimClient
@@ -36,22 +35,26 @@ class BaseActuator:
             await bs.get_equipment(self.equipment_id)
             logger.info(f"Equipment {self.equipment_id} already exists")
         except Exception:
-            await bs.create_equipment({
-                "id": self.equipment_id,
-                "name": f"{self.actuator_type} ({self.room})",
-                "type": "actuator",
-                "category": "fire_response",
-                "level": self.level,
-                "room": self.room,
-                "status": "running",
-                "sensors": [],
-                "actuators": [{
-                    "id": self.actuator_id,
-                    "name": self.actuator_type.replace("_", " ").capitalize(),
-                    "type": self.actuator_type,
-                    "state": self.state,
-                }],
-            })
+            await bs.create_equipment(
+                {
+                    "id": self.equipment_id,
+                    "name": f"{self.actuator_type} ({self.room})",
+                    "type": "actuator",
+                    "category": "fire_response",
+                    "level": self.level,
+                    "room": self.room,
+                    "status": "running",
+                    "sensors": [],
+                    "actuators": [
+                        {
+                            "id": self.actuator_id,
+                            "name": self.actuator_type.replace("_", " ").capitalize(),
+                            "type": self.actuator_type,
+                            "state": self.state,
+                        }
+                    ],
+                }
+            )
             logger.info(f"Registered {self.actuator_type}: {self.actuator_id} in {self.room}")
 
     async def set_state(self, bs: BuildSimClient, new_state: str):

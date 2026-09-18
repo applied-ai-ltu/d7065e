@@ -5,8 +5,8 @@ import logging
 import os
 
 from fds.config import Config
-from fds.pipeline.schema import init_database
 from fds.pipeline.consumer import PipelineConsumer
+from fds.pipeline.schema import init_database
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 

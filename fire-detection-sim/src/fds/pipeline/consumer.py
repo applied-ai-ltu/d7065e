@@ -6,7 +6,7 @@ Subscribes to building/# topics, validates readings, writes to TimescaleDB.
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import asyncpg
 import paho.mqtt.client as mqtt
@@ -19,7 +19,6 @@ SCHEMA = "fire_detection_sim"
 
 
 class PipelineConsumer:
-
     def __init__(self, config: Config):
         self.config = config
         self._pool = None
@@ -61,7 +60,7 @@ class PipelineConsumer:
                 f"""INSERT INTO {SCHEMA}.sensor_readings
                     (time, sensor_id, room, level, sensor_type, value, unit)
                     VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-                datetime.fromtimestamp(reading["timestamp"], tz=timezone.utc),
+                datetime.fromtimestamp(reading["timestamp"], tz=UTC),
                 reading["sensor_id"],
                 reading["room"],
                 reading["level"],
@@ -76,7 +75,7 @@ class PipelineConsumer:
                 reading = await asyncio.wait_for(self._queue.get(), timeout=1.0)
                 await self._write_reading(reading)
                 logger.debug(f"Stored: {reading['sensor_id']}={reading['value']}")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 logger.warning(f"Write failed: {e}")

@@ -9,11 +9,10 @@ import logging
 import os
 
 import asyncpg
-import numpy as np
 
+from fds.config import Config
 from fds.models.detector import FireDetector
 from fds.models.trainer import generate_normal_windows, train_detector
-from fds.config import Config
 from fds.secrets import get_secrets
 
 logger = logging.getLogger(__name__)
@@ -59,11 +58,13 @@ def rows_to_windows(rows, window_size=10):
                 buffer[key].append(float(val))
 
         if all(len(v) >= window_size for v in buffer.values()):
-            windows.append({
-                "smoke": buffer["smoke"][-window_size:],
-                "co": buffer["co"][-window_size:],
-                "temperature": buffer["temperature"][-window_size:],
-            })
+            windows.append(
+                {
+                    "smoke": buffer["smoke"][-window_size:],
+                    "co": buffer["co"][-window_size:],
+                    "temperature": buffer["temperature"][-window_size:],
+                }
+            )
             for key in buffer:
                 buffer[key] = buffer[key][1:]
 
@@ -92,11 +93,12 @@ async def retrain_with_clearml(config):
             normal_windows = rows_to_windows(rows)
             # Filter to normal-only (low smoke, low CO)
             normal_windows = [
-                w for w in normal_windows
-                if max(w["smoke"]) < 5 and max(w["co"]) < 10
+                w for w in normal_windows if max(w["smoke"]) < 5 and max(w["co"]) < 10
             ]
             if len(normal_windows) < 100:
-                logger.info(f"Only {len(normal_windows)} normal windows, supplementing with synthetic")
+                logger.info(
+                    f"Only {len(normal_windows)} normal windows, supplementing with synthetic"
+                )
                 normal_windows.extend(generate_normal_windows(n_windows=500))
 
         logger.info(f"Training on {len(normal_windows)} normal windows")
@@ -107,7 +109,7 @@ async def retrain_with_clearml(config):
         detector.train(normal_windows)
 
         # Evaluate
-        from fds.models.trainer import generate_fire_windows, generate_false_alarm_windows
+        from fds.models.trainer import generate_false_alarm_windows, generate_fire_windows
 
         test_normal = generate_normal_windows(n_windows=100)
         test_fire = generate_fire_windows(n_windows=50)
@@ -130,6 +132,7 @@ async def retrain_with_clearml(config):
 
         # Training curve: accuracy vs training set size
         from fds.models.detector import FireDetector as _FD
+
         sizes = [50, 100, 200, 500, 1000, min(2000, len(normal_windows)), len(normal_windows)]
         for i, size in enumerate(sizes):
             _d = _FD()
@@ -144,27 +147,40 @@ async def retrain_with_clearml(config):
 
         # Anomaly score distribution
         import numpy as np
+
         normal_scores = [detector.predict(w)[1] for w in test_normal[:50]]
         fire_scores = [detector.predict(w)[1] for w in test_fire[:50]]
         false_scores = [detector.predict(w)[1] for w in test_false[:50]]
         task.get_logger().report_histogram(
-            "anomaly_scores", "normal", values=normal_scores, iteration=0,
+            "anomaly_scores",
+            "normal",
+            values=normal_scores,
+            iteration=0,
         )
         task.get_logger().report_histogram(
-            "anomaly_scores", "fire", values=fire_scores, iteration=0,
+            "anomaly_scores",
+            "fire",
+            values=fire_scores,
+            iteration=0,
         )
         task.get_logger().report_histogram(
-            "anomaly_scores", "false_alarm", values=false_scores, iteration=0,
+            "anomaly_scores",
+            "false_alarm",
+            values=false_scores,
+            iteration=0,
         )
 
         # Confusion matrix
         task.get_logger().report_confusion_matrix(
-            "confusion_matrix", "detector",
-            matrix=np.array([
-                [correct_normal, 100 - correct_normal],
-                [50 - correct_fire, correct_fire],
-                [correct_false, 50 - correct_false],
-            ]),
+            "confusion_matrix",
+            "detector",
+            matrix=np.array(
+                [
+                    [correct_normal, 100 - correct_normal],
+                    [50 - correct_fire, correct_fire],
+                    [correct_false, 50 - correct_false],
+                ]
+            ),
             xlabels=["Predicted Normal", "Predicted Fire"],
             ylabels=["Actual Normal", "Actual Fire", "Actual False Alarm"],
             iteration=0,
@@ -172,11 +188,14 @@ async def retrain_with_clearml(config):
 
         # Also log as parameters (always visible in task overview)
         task.connect(metrics, name="evaluation_metrics")
-        task.connect({
-            "training_windows": len(normal_windows),
-            "contamination": 0.05,
-            "n_estimators": 200,
-        }, name="training_config")
+        task.connect(
+            {
+                "training_windows": len(normal_windows),
+                "contamination": 0.05,
+                "n_estimators": 200,
+            },
+            name="training_config",
+        )
 
         # Save model
         os.makedirs("models", exist_ok=True)

@@ -1,6 +1,5 @@
 """Create TimescaleDB tables and continuous aggregates."""
 
-import asyncio
 import logging
 
 import asyncpg

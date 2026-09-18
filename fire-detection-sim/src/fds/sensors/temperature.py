@@ -12,7 +12,6 @@ from fds.sensors.base import BaseSensor
 
 
 class TemperatureSensor(BaseSensor):
-
     def __init__(
         self,
         fire_start=None,

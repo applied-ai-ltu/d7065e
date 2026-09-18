@@ -7,28 +7,25 @@ import asyncio
 import json
 import logging
 import math
-import os
 import time
-import threading
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from fds.agent.agent import FireAgent
 from fds.buildsim.client import BuildSimClient
 from fds.config import Config
-from fds.secrets import get_secrets
-from fds.physics.engine import PhysicsEngine
-from fds.physics.sensor_gateway import SensorGateway, SensorConfig
-from fds.physics.actuator_process import ActuatorProcess, ActuatorConfig
-from fds.physics.occupancy import OccupancySimulator
 from fds.models.detector import FireDetector
-from fds.models.spread import FireSpreadPredictor
 from fds.models.evacuation import EvacuationPlanner
-from fds.agent.agent import FireAgent
-from fds.pipeline.schema import init_database
+from fds.models.spread import FireSpreadPredictor
+from fds.physics.actuator_process import ActuatorConfig, ActuatorProcess
+from fds.physics.engine import PhysicsEngine
+from fds.physics.occupancy import OccupancySimulator
+from fds.physics.sensor_gateway import SensorConfig, SensorGateway
 from fds.pipeline.consumer import PipelineConsumer
+from fds.pipeline.schema import init_database
+from fds.secrets import get_secrets
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -39,6 +36,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 class SimState:
     """Holds all simulation state."""
+
     def __init__(self):
         self.running = False
         self.engine = None
@@ -49,6 +47,7 @@ class SimState:
         self.config = None
         self.secrets = None
         self.start_time = 0
+
 
 sim = SimState()
 
@@ -80,8 +79,10 @@ async def start_simulation():
 
     # Init DB
     await init_database(
-        sim.config.database.host, sim.config.database.port,
-        sim.config.database.user, sim.config.database.password,
+        sim.config.database.host,
+        sim.config.database.port,
+        sim.config.database.user,
+        sim.config.database.password,
         sim.config.database.database,
     )
 
@@ -105,7 +106,7 @@ async def start_simulation():
         for other_name, other_pos in node_positions.items():
             if other_name == name:
                 continue
-            dist = math.sqrt((pos[0] - other_pos[0])**2 + (pos[1] - other_pos[1])**2)
+            dist = math.sqrt((pos[0] - other_pos[0]) ** 2 + (pos[1] - other_pos[1]) ** 2)
             if dist < 50:
                 neighbors.append((other_name, dist))
         engine.set_neighbors(name, neighbors)
@@ -125,23 +126,44 @@ async def start_simulation():
         ("co", "ppm", 0.5, 3.0, 0.002, 0.005),
         ("temperature", "C", 0.15, 1.0, 0.0005, 0.002),
     ]:
-        gateway.add_sensor(SensorConfig(
-            sensor_id=f"{room}-{stype}", equipment_id=eq_id,
-            room=room, level="level0", sensor_type=stype, unit=unit,
-            noise_sigma=noise, lag_seconds=lag, drift_rate=drift, stuck_probability=stuck,
-        ))
+        gateway.add_sensor(
+            SensorConfig(
+                sensor_id=f"{room}-{stype}",
+                equipment_id=eq_id,
+                room=room,
+                level="level0",
+                sensor_type=stype,
+                unit=unit,
+                noise_sigma=noise,
+                lag_seconds=lag,
+                drift_rate=drift,
+                stuck_probability=stuck,
+            )
+        )
 
     # Actuators
-    sprinkler = ActuatorProcess(ActuatorConfig(
-        actuator_id=f"{room}-sprinkler", equipment_id=f"sprinkler-{room}",
-        room=room, level="level0", actuator_type="sprinkler",
-        travel_rate=0.5, stuck_probability=0.005,
-    ))
-    door = ActuatorProcess(ActuatorConfig(
-        actuator_id=f"{room}-door", equipment_id=f"door-{room}",
-        room=room, level="level0", actuator_type="fire_door",
-        travel_rate=0.3, stuck_probability=0.002,
-    ))
+    sprinkler = ActuatorProcess(
+        ActuatorConfig(
+            actuator_id=f"{room}-sprinkler",
+            equipment_id=f"sprinkler-{room}",
+            room=room,
+            level="level0",
+            actuator_type="sprinkler",
+            travel_rate=0.5,
+            stuck_probability=0.005,
+        )
+    )
+    door = ActuatorProcess(
+        ActuatorConfig(
+            actuator_id=f"{room}-door",
+            equipment_id=f"door-{room}",
+            room=room,
+            level="level0",
+            actuator_type="fire_door",
+            travel_rate=0.3,
+            stuck_probability=0.002,
+        )
+    )
 
     # Pipeline consumer
     consumer = PipelineConsumer(sim.config)
@@ -152,6 +174,7 @@ async def start_simulation():
         detector.load("models/detector.pkl")
     except FileNotFoundError:
         from fds.models.trainer import train_detector
+
         detector = train_detector()
 
     # Spread + evac
@@ -179,15 +202,19 @@ async def start_simulation():
 
     # Agent
     agent = FireAgent(
-        bs=bs, detector=detector,
-        spread_predictor=spread, evacuation_planner=evac,
+        bs=bs,
+        detector=detector,
+        spread_predictor=spread,
+        evacuation_planner=evac,
         llm_url=sim.config.llm.base_url,
         llm_api_key=sim.secrets.get("litellm_api_key", ""),
         model=sim.config.llm.model,
         tick_interval=5.0,
         db_config={
-            "host": sim.config.database.host, "port": sim.config.database.port,
-            "user": sim.config.database.user, "password": sim.config.database.password,
+            "host": sim.config.database.host,
+            "port": sim.config.database.port,
+            "user": sim.config.database.user,
+            "password": sim.config.database.password,
             "database": sim.config.database.database,
         },
     )
@@ -200,7 +227,7 @@ async def start_simulation():
                 await engine.sync_actuators_from_buildsim(bs)
             except Exception:
                 pass
-            sim_hour += (2.0 / 60.0)
+            sim_hour += 2.0 / 60.0
             if sim_hour >= 24:
                 sim_hour = 7.0
             for room_name in engine.rooms:
@@ -211,13 +238,16 @@ async def start_simulation():
 
     # MQTT feed to agent
     import paho.mqtt.client as mqtt
+
     mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+
     def on_message(client, userdata, msg):
         try:
             data = json.loads(msg.payload.decode())
             agent.update_reading(data["room"], data["type"], data["value"])
         except Exception:
             pass
+
     mqtt_client.on_message = on_message
     mqtt_client.connect(sim.config.mqtt.host, sim.config.mqtt.port)
     mqtt_client.subscribe(f"{sim.config.mqtt.topic_prefix}/#", qos=1)
@@ -292,7 +322,9 @@ async def stop_simulation():
 @app.post("/fire/start")
 async def start_fire(req: FireRequest):
     if not sim.running or not sim.engine:
-        raise HTTPException(status_code=503, detail="Simulation not running. Start simulation first.")
+        raise HTTPException(
+            status_code=503, detail="Simulation not running. Start simulation first."
+        )
     if req.room not in sim.engine.rooms:
         raise HTTPException(status_code=404, detail=f"Room {req.room} not found")
     if any(f.room == req.room for f in sim.engine.fires):
@@ -322,8 +354,10 @@ async def trigger_false_alarm(req: FireRequest):
 
 if __name__ == "__main__":
     import uvicorn
+
     # Init tracing
     from fds.tracing import setup_phoenix
+
     setup_phoenix("d7065e")
 
     print("=" * 60)

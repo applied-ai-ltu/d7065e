@@ -7,7 +7,6 @@ from fds.sensors.base import BaseSensor
 
 
 class SmokeSensor(BaseSensor):
-
     def __init__(self, fire_start=None, false_alarm_times=None, **kwargs):
         super().__init__(sensor_type="smoke", unit="%obs/m", **kwargs)
         self.fire_start = fire_start

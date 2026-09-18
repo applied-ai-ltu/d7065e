@@ -11,7 +11,6 @@ from fds.sensors.base import BaseSensor
 
 
 class COSensor(BaseSensor):
-
     def __init__(self, fire_start=None, false_alarm_times=None, **kwargs):
         super().__init__(sensor_type="co", unit="ppm", **kwargs)
         self.fire_start = fire_start

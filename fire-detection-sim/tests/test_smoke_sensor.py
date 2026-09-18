@@ -1,7 +1,7 @@
 """Test smoke sensor value generation."""
 
-from fds.sensors.smoke import SmokeSensor
 from fds.config import Config
+from fds.sensors.smoke import SmokeSensor
 
 
 def make_sensor(**kwargs):

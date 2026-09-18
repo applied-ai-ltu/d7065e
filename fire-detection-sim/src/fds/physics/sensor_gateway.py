@@ -130,14 +130,16 @@ class SensorGateway:
                     "sensors": [],
                     "actuators": [],
                 }
-            equipment[s.equipment_id]["sensors"].append({
-                "id": s.sensor_id,
-                "name": s.sensor_type.capitalize(),
-                "type": s.sensor_type,
-                "data_type": "text",
-                "unit": s.unit,
-                "value": "0.0",
-            })
+            equipment[s.equipment_id]["sensors"].append(
+                {
+                    "id": s.sensor_id,
+                    "name": s.sensor_type.capitalize(),
+                    "type": s.sensor_type,
+                    "data_type": "text",
+                    "unit": s.unit,
+                    "value": "0.0",
+                }
+            )
 
         registered = 0
         skipped = 0
@@ -162,7 +164,9 @@ class SensorGateway:
 
         await self.register_all(bs)
         self._running = True
-        logger.info(f"Sensor gateway started ({len(self.sensors)} sensors, interval={self.interval}s)")
+        logger.info(
+            f"Sensor gateway started ({len(self.sensors)} sensors, interval={self.interval}s)"
+        )
 
         while self._running:
             now = time.time()
@@ -184,16 +188,19 @@ class SensorGateway:
 
                 # Publish to MQTT (sanitize room name - some contain + which is MQTT wildcard)
                 safe_room = sensor.room.replace("+", "_").replace("#", "_")
-                topic = f"{self.config.mqtt.topic_prefix}/{sensor.level}/{safe_room}/{sensor.sensor_type}"
-                payload = json.dumps({
-                    "sensor_id": sensor.sensor_id,
-                    "room": sensor.room,
-                    "level": sensor.level,
-                    "type": sensor.sensor_type,
-                    "value": value,
-                    "unit": sensor.unit,
-                    "timestamp": now,
-                })
+                prefix = self.config.mqtt.topic_prefix
+                topic = f"{prefix}/{sensor.level}/{safe_room}/{sensor.sensor_type}"
+                payload = json.dumps(
+                    {
+                        "sensor_id": sensor.sensor_id,
+                        "room": sensor.room,
+                        "level": sensor.level,
+                        "type": sensor.sensor_type,
+                        "value": value,
+                        "unit": sensor.unit,
+                        "timestamp": now,
+                    }
+                )
                 self._mqtt.publish(topic, payload, qos=1)
 
             await asyncio.sleep(self.interval)

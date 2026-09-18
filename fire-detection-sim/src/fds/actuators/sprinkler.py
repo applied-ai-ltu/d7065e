@@ -4,7 +4,6 @@ from fds.actuators.base import BaseActuator
 
 
 class SprinklerActuator(BaseActuator):
-
     def __init__(self, **kwargs):
         super().__init__(actuator_type="sprinkler", initial_state="off", **kwargs)
 

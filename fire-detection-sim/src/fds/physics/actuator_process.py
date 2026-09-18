@@ -12,8 +12,6 @@ import logging
 import random
 from dataclasses import dataclass
 
-from fds.buildsim.client import BuildSimClient
-
 logger = logging.getLogger(__name__)
 
 
@@ -63,22 +61,26 @@ class ActuatorProcess:
             await bs.get_equipment(self.config.equipment_id)
         except Exception:
             initial = "off" if self.config.actuator_type == "sprinkler" else "closed_locked"
-            await bs.create_equipment({
-                "id": self.config.equipment_id,
-                "name": f"{self.config.actuator_type} ({self.config.room})",
-                "type": "actuator",
-                "category": "fire_response",
-                "level": self.config.level,
-                "room": self.config.room,
-                "status": "running",
-                "sensors": [],
-                "actuators": [{
-                    "id": self.config.actuator_id,
-                    "name": self.config.actuator_type.replace("_", " ").capitalize(),
-                    "type": self.config.actuator_type,
-                    "state": initial,
-                }],
-            })
+            await bs.create_equipment(
+                {
+                    "id": self.config.equipment_id,
+                    "name": f"{self.config.actuator_type} ({self.config.room})",
+                    "type": "actuator",
+                    "category": "fire_response",
+                    "level": self.config.level,
+                    "room": self.config.room,
+                    "status": "running",
+                    "sensors": [],
+                    "actuators": [
+                        {
+                            "id": self.config.actuator_id,
+                            "name": self.config.actuator_type.replace("_", " ").capitalize(),
+                            "type": self.config.actuator_type,
+                            "state": initial,
+                        }
+                    ],
+                }
+            )
             logger.info(f"Registered actuator: {self.config.actuator_id}")
 
     async def _poll_command(self, bs):
@@ -97,7 +99,9 @@ class ActuatorProcess:
     async def run(self, bs, interval=1.0):
         await self.register(bs)
         self._running = True
-        logger.info(f"Actuator {self.config.actuator_id} started (rate={self.config.travel_rate}/s)")
+        logger.info(
+            f"Actuator {self.config.actuator_id} started (rate={self.config.travel_rate}/s)"
+        )
 
         while self._running:
             commanded = await self._poll_command(bs)
