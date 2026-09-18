@@ -108,7 +108,7 @@ class FireDetector:
             from sklearn.pipeline import Pipeline
             pipe = Pipeline([("scaler", self.scaler), ("detector", self.model)])
 
-            onnx_model = convert_sklearn(pipe, initial_types=initial_type)
+            onnx_model = convert_sklearn(pipe, initial_types=initial_type, target_opset={"": 17, "ai.onnx.ml": 3})
             path = Path(path)
             path.parent.mkdir(parents=True, exist_ok=True)
             onnx.save_model(onnx_model, str(path))
