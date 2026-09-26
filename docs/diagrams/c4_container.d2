@@ -1,0 +1,105 @@
+direction: down
+
+title: {
+  label: "C4 Container Diagram (Level 2) — Fire Detection System"
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+# External
+buildsim: {
+  label: "BuildSim\n[Software System]\nEnvironment: sensor values,\nactuator state, 3D viewer"
+  style.fill: "#999999"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+}
+
+# System boundary
+system: {
+  label: "Fire Detection & Autonomous Response [System]"
+  style.stroke-dash: 3
+  style.fill: "#ffffff"
+
+  physics: {
+    label: "Physical Simulator\n[Container: Python]\nAdvances room physics;\nwrites values, reads actuator state"
+    style.fill: "#438dd5"
+    style.font-color: "#ffffff"
+    style.border-radius: 8
+  }
+
+  gateway: {
+    label: "Sensor Gateway\n[Container: Python]\nDegrades truth (noise, lag,\ndrift, stuck); publishes MQTT"
+    style.fill: "#438dd5"
+    style.font-color: "#ffffff"
+    style.border-radius: 8
+  }
+
+  mqtt: {
+    label: "MQTT Broker\n[Mosquitto]\nDecouples producers\nfrom consumers"
+    style.fill: "#438dd5"
+    style.font-color: "#ffffff"
+    shape: cylinder
+  }
+
+  pipeline: {
+    label: "Pipeline Consumer\n[Container: Python]\nStores readings;\ncontinuous aggregates"
+    style.fill: "#438dd5"
+    style.font-color: "#ffffff"
+    style.border-radius: 8
+  }
+
+  tsdb: {
+    label: "TimescaleDB\n[Database]\nSensor readings,\nfire events, aggregates"
+    style.fill: "#438dd5"
+    style.font-color: "#ffffff"
+    shape: cylinder
+  }
+
+  agent: {
+    label: "Fire Agent\n[Container: Python]\nDetects anomalies, LLM planning,\ncommands actuators"
+    style.fill: "#438dd5"
+    style.font-color: "#ffffff"
+    style.border-radius: 8
+  }
+
+  control_api: {
+    label: "Control API\n[Container: Python/FastAPI]\nStart/stop fire,\nsystem control"
+    style.fill: "#438dd5"
+    style.font-color: "#ffffff"
+    style.border-radius: 8
+  }
+
+  grafana: {
+    label: "Grafana Dashboard\n[Container: Web]\nOperations + Technical\nmonitoring"
+    style.fill: "#438dd5"
+    style.font-color: "#ffffff"
+    style.border-radius: 8
+  }
+
+  llm: {
+    label: "LiteLLM\n[Container: Python]\nRoutes to self-hosted\nQwen 2.5 14B + Groq fallback"
+    style.fill: "#438dd5"
+    style.font-color: "#ffffff"
+    style.border-radius: 8
+  }
+}
+
+# Flows
+system.physics -> buildsim: "writes sensor values\n[REST PUT]"
+buildsim -> system.physics: "reads actuator state\n[REST GET]"
+system.gateway -> buildsim: "reads sensor values\n[REST GET]"
+system.gateway -> system.mqtt: "publishes readings\n[MQTT QoS 1]"
+system.mqtt -> system.pipeline: "consumes readings\n[MQTT]"
+system.pipeline -> system.tsdb: "writes readings\n[SQL INSERT]"
+system.agent -> buildsim: "reads all sensors\n[REST GET /equipment]"
+system.agent -> buildsim: "commands actuators\n[REST PUT]"
+system.agent -> system.tsdb: "logs fire events\n[SQL INSERT]"
+system.agent -> system.llm: "assessment + planning\n[HTTPS]"
+system.grafana -> system.tsdb: "queries data\n[SQL]"
+system.control_api -> system.physics: "start/stop fire\n[in-process]"
+grafana_link: {
+  label: ""
+}
+buildsim -> system.grafana: "live state\n[WebSocket]" {style.stroke-dash: 3}

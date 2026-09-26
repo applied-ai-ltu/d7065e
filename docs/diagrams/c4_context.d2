@@ -1,0 +1,62 @@
+direction: down
+
+title: {
+  label: "C4 System Context (Level 1) — Fire Detection & Autonomous Response"
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+# External actors
+building_manager: {
+  label: "Building Manager\n[Person]\nMonitors dashboards,\ntriggers test fires"
+  shape: person
+  style.fill: "#08427b"
+  style.font-color: "#ffffff"
+}
+
+building_occupants: {
+  label: "Building Occupants\n[Person]\nPresence is sensed"
+  shape: person
+  style.fill: "#08427b"
+  style.font-color: "#ffffff"
+}
+
+# The system
+fire_system: {
+  label: "Fire Detection &\nAutonomous Response\n[Software System]\nDetects fires, plans response,\ncommands actuators"
+  style.fill: "#1168bd"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+}
+
+# External systems
+buildsim: {
+  label: "BuildSim\n[Software System]\nBuilding environment:\nsensor values, actuator state,\n3D viewer"
+  style.fill: "#999999"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+}
+
+external_compute: {
+  label: "External Compute\n[Infrastructure]\nRaspberry Pi (edge inference),\nJetson (embeddings)"
+  style.fill: "#999999"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+}
+
+other_systems: {
+  label: "Other Building Systems\ne.g. Ventilation, Security,\nEnergy Management\n[Software Systems]"
+  style.fill: "#999999"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+}
+
+# Relationships
+building_manager -> fire_system: "monitors / triggers fires\n[HTTPS, Swagger UI]"
+building_occupants -> fire_system: "presence sensed\n[occupancy model]"
+fire_system -> buildsim: "reads sensors /\ncommands actuators\n[REST]"
+fire_system -> external_compute: "offloads inference\n[ONNX, optional]"
+other_systems -> buildsim: "sensors / actuators\n[REST]"
+building_manager -> other_systems: "monitors" {style.stroke-dash: 3}

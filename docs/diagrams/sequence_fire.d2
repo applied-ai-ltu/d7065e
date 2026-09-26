@@ -1,0 +1,65 @@
+direction: right
+
+title: {
+  label: "C4 Dynamic Diagram — Fire Detection Scenario (A109)"
+  near: top-center
+  shape: text
+  style.font-size: 20
+  style.bold: true
+}
+
+physics: "Physical\nSimulator" {
+  shape: rectangle
+  style.fill: "#438dd5"
+  style.font-color: "#ffffff"
+}
+buildsim: "BuildSim" {
+  shape: rectangle
+  style.fill: "#999999"
+  style.font-color: "#ffffff"
+}
+gateway: "Sensor\nGateway" {
+  shape: rectangle
+  style.fill: "#438dd5"
+  style.font-color: "#ffffff"
+}
+mqtt: "MQTT\nBroker" {
+  shape: rectangle
+  style.fill: "#438dd5"
+  style.font-color: "#ffffff"
+}
+pipeline: "Pipeline" {
+  shape: rectangle
+  style.fill: "#438dd5"
+  style.font-color: "#ffffff"
+}
+tsdb: "TimescaleDB" {
+  shape: cylinder
+  style.fill: "#438dd5"
+  style.font-color: "#ffffff"
+}
+agent: "Fire\nAgent" {
+  shape: rectangle
+  style.fill: "#438dd5"
+  style.font-color: "#ffffff"
+}
+llm: "LiteLLM" {
+  shape: rectangle
+  style.fill: "#438dd5"
+  style.font-color: "#ffffff"
+}
+
+# Sequence
+physics -> buildsim: "1: PUT sensor values\n(smoke=15%, CO=30ppm, temp=28°C)" {style.stroke: "#e74c3c"}
+gateway -> buildsim: "2: GET sensor values" {style.stroke: "#3498db"}
+gateway -> mqtt: "3: publish (degraded)\nbuilding/level0/A109/smoke" {style.stroke: "#3498db"}
+mqtt -> pipeline: "4: consume readings" {style.stroke: "#2ecc71"}
+pipeline -> tsdb: "5: INSERT sensor_readings" {style.stroke: "#2ecc71"}
+agent -> buildsim: "6: GET /equipment\n(batch read all sensors)" {style.stroke: "#e67e22"}
+agent -> agent: "7: isolation forest\ndetects anomaly in A109" {style.stroke: "#e67e22"}
+agent -> llm: "8: assess — is this real fire?\n(smoke+CO = yes)" {style.stroke: "#9b59b6"}
+llm -> agent: "9: plan: sprinkler A109,\nunlock doors all floors,\nevac via stairwell B" {style.stroke: "#9b59b6"}
+agent -> agent: "10: verify plan\n(all exits unlocked? ✓)" {style.stroke: "#e67e22"}
+agent -> buildsim: "11: PUT sprinkler ON,\nPUT doors UNLOCKED" {style.stroke: "#e74c3c"}
+agent -> tsdb: "12: INSERT fire_detected\n(A109, critical, plan)" {style.stroke: "#e67e22"}
+buildsim -> physics: "13: next tick reads\nsprinkler=ON → reduce fire" {style.stroke: "#e74c3c"; style.stroke-dash: 3}
