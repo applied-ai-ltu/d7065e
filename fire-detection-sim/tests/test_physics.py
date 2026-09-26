@@ -93,3 +93,64 @@ def test_occupancy_adds_heat():
         e2.step(dt=2.0)
 
     assert e2.get_room("A109").temperature > e1.get_room("A109").temperature
+
+
+def test_sprinkler_activates_mechanically_at_68c():
+    """Glass bulb breaks at 68C -- no command, no agent, just heat."""
+    e = PhysicsEngine()
+    e.add_room("A109", "level0")
+    e.start_fire("A109", intensity=1.0)
+
+    activated = False
+    for _ in range(300):
+        e.step(dt=2.0)
+        room = e.get_room("A109")
+        if room.sprinkler_active:
+            activated = True
+            assert room.temperature >= 60.0, f"Activated too early at {room.temperature:.1f}C"
+            break
+
+    assert activated, "Sprinkler never activated -- fire not hot enough in 600s"
+
+
+def test_sprinkler_does_not_activate_without_heat():
+    """Smoke alone (false alarm) cannot break the bulb."""
+    e = PhysicsEngine()
+    e.add_room("A109", "level0")
+    e.get_room("A109").smoke = 50.0  # heavy smoke, no fire, no heat
+
+    for _ in range(50):
+        e.step(dt=2.0)
+
+    assert not e.get_room("A109").sprinkler_active
+    assert e.get_room("A109").temperature < 30
+
+
+def test_sprinkler_stops_temperature_rise():
+    """Once active, water suppresses the fire -- temp plateaus or falls."""
+    e = PhysicsEngine()
+    e.add_room("A109", "level0")
+    e.start_fire("A109", intensity=1.0)
+
+    for _ in range(300):
+        e.step(dt=2.0)
+        if e.get_room("A109").sprinkler_active:
+            break
+    assert e.get_room("A109").sprinkler_active
+
+    peak = e.get_room("A109").temperature
+    for _ in range(60):
+        e.step(dt=2.0)
+    after = e.get_room("A109").temperature
+
+    assert after <= peak + 3.0, f"Temp kept rising after sprinkler: {peak:.1f} -> {after:.1f}"
+
+
+def test_stop_fire_resets_sprinkler():
+    """After the event, the head is replaced -- ready for the next fire."""
+    e = PhysicsEngine()
+    e.add_room("A109", "level0")
+    e.set_sprinkler("A109", True)
+    e.start_fire("A109")
+    e.stop_fire("A109")
+    assert not e.get_room("A109").sprinkler_active

@@ -150,7 +150,6 @@ Assess the situation and provide a response plan."""
             "affected_level": level,
             "risk_rooms": [r.room for r in risk_rooms[:5]],
             "plan": {
-                "sprinklers": [{"room": room, "action": "activate"}] if is_fire else [],
                 "doors": [{"room": room, "action": "unlock"}] if is_fire else [],
                 "evacuate": is_fire,
             },
@@ -168,8 +167,6 @@ Assess the situation and provide a response plan."""
         assessment = plan.get("assessment", {})
         if assessment.get("is_fire") and assessment.get("confidence", 0) >= 0.7:
             plan_data = plan.get("plan", {})
-            if not plan_data.get("sprinklers"):
-                issues.append("High-confidence fire but no sprinklers activated")
             if not plan_data.get("doors"):
                 issues.append("Fire detected but no doors unlocked")
         if issues:

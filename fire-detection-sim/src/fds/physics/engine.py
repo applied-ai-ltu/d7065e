@@ -2,7 +2,9 @@
 
 Computes temperature, smoke density, and CO concentration per room.
 Models heat propagation, smoke diffusion, occupant heat gain, wall loss.
-Actuator states feed back (sprinkler reduces fire intensity).
+Sprinklers are mechanical: a glass bulb breaks at 68C and water flows.
+No electronic command activates them. Once active, they stay active
+until the fire is extinguished (bulb cannot re-seal).
 This is the ONLY source of truth. Everything else samples from it.
 """
 
@@ -52,6 +54,7 @@ class PhysicsEngine:
         smoke_decay_rate: float = 0.02,
         co_decay_rate: float = 0.01,
         sprinkler_effectiveness: float = 0.85,
+        sprinkler_activation_temp: float = 68.0,
     ):
         self.outdoor_temp = outdoor_temp
         self.wall_loss_rate = wall_loss_rate
@@ -61,6 +64,7 @@ class PhysicsEngine:
         self.smoke_decay_rate = smoke_decay_rate
         self.co_decay_rate = co_decay_rate
         self.sprinkler_effectiveness = sprinkler_effectiveness
+        self.sprinkler_activation_temp = sprinkler_activation_temp
 
         self.rooms: dict[str, RoomState] = {}
         self.neighbors: dict[str, list[tuple[str, float]]] = {}
@@ -89,13 +93,17 @@ class PhysicsEngine:
         logger.info(f"FIRE STARTED in {room} (intensity={intensity})")
 
     def stop_fire(self, room):
+        """Stop a fire. Also resets the sprinkler head (replaced after event)."""
         self.fires = [f for f in self.fires if f.room != room]
         if room in self.rooms:
             self.rooms[room].on_fire = False
             self.rooms[room].fire_intensity = 0.0
+            self.rooms[room].sprinkler_active = False
         logger.info(f"Fire stopped in {room}")
 
     def set_sprinkler(self, room, active):
+        """Force sprinkler state. Only for tests -- real sprinklers are mechanical
+        and activate automatically in step() when temperature >= activation_temp."""
         if room in self.rooms:
             self.rooms[room].sprinkler_active = active
 
@@ -118,6 +126,14 @@ class PhysicsEngine:
         self._sim_time += dt
 
         for name, room in self.rooms.items():
+            # --- Mechanical sprinkler (glass bulb breaks at activation temp) ---
+            if not room.sprinkler_active and room.temperature >= self.sprinkler_activation_temp:
+                room.sprinkler_active = True
+                logger.info(
+                    f"SPRINKLER ACTIVATED (mechanical) in {name}: "
+                    f"temp={room.temperature:.1f}C >= {self.sprinkler_activation_temp}C"
+                )
+
             # --- Temperature ---
             # Wall heat loss
             delta_wall = self.wall_loss_rate * (room.temperature - self.outdoor_temp) * dt
@@ -135,7 +151,12 @@ class PhysicsEngine:
                 if room.sprinkler_active:
                     heat_fire *= 1.0 - self.sprinkler_effectiveness
 
-            room.temperature += heat_fire + heat_occupants - delta_wall
+            sprinkler_cooling = 0.0
+            if room.sprinkler_active:
+                # Water cools the room toward ambient: ~0.5C per step
+                sprinkler_cooling = 0.5 * dt * max(0.0, (room.temperature - 21.0) / 50.0)
+
+            room.temperature += heat_fire + heat_occupants - delta_wall - sprinkler_cooling
 
             # --- Smoke ---
             if room.on_fire:
