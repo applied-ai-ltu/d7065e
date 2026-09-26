@@ -55,6 +55,66 @@ SELECT create_hypertable(
     by_range('time'),
     if_not_exists => TRUE
 );
+
+-- Tier-1 (edge) decisions and alerts: every threshold candidate, IF verdict and escalation
+CREATE TABLE IF NOT EXISTS {SCHEMA}.edge_decisions (
+    time        TIMESTAMPTZ NOT NULL,
+    level       TEXT NOT NULL,
+    room        TEXT NOT NULL,
+    node        TEXT,
+    role        TEXT,
+    kind        TEXT NOT NULL,
+    decision    TEXT NOT NULL,
+    severity    TEXT,
+    smoke       DOUBLE PRECISION,
+    co          DOUBLE PRECISION,
+    temperature DOUBLE PRECISION,
+    if_ms       DOUBLE PRECISION,
+    if_anomaly  BOOLEAN
+);
+
+SELECT create_hypertable(
+    '{SCHEMA}.edge_decisions',
+    by_range('time'),
+    if_not_exists => TRUE
+);
+
+CREATE INDEX IF NOT EXISTS edge_decisions_room_time
+    ON {SCHEMA}.edge_decisions (room, time DESC);
+
+-- Edge controller liveness (active/standby per floor)
+CREATE TABLE IF NOT EXISTS {SCHEMA}.heartbeats (
+    time   TIMESTAMPTZ NOT NULL,
+    level  TEXT NOT NULL,
+    role   TEXT NOT NULL,
+    node   TEXT,
+    acting BOOLEAN
+);
+
+SELECT create_hypertable(
+    '{SCHEMA}.heartbeats',
+    by_range('time'),
+    if_not_exists => TRUE
+);
+
+-- Tier-2 (server/LLM) decisions: confirm, watch_pending, escalated, stand_down,
+-- stand_down_refused, failover, server_takeover, server_handback
+CREATE TABLE IF NOT EXISTS {SCHEMA}.llm_overrides (
+    time          TIMESTAMPTZ NOT NULL,
+    room          TEXT NOT NULL,
+    level         TEXT NOT NULL,
+    override_type TEXT NOT NULL,
+    reason        TEXT
+);
+
+SELECT create_hypertable(
+    '{SCHEMA}.llm_overrides',
+    by_range('time'),
+    if_not_exists => TRUE
+);
+
+CREATE INDEX IF NOT EXISTS llm_overrides_type_time
+    ON {SCHEMA}.llm_overrides (override_type, time DESC);
 """
 
 CREATE_CONTINUOUS_AGGREGATES = f"""

@@ -162,31 +162,6 @@ class FireAgent:
         except Exception as e:
             logger.warning(f"Door discovery failed: {e}")
 
-    async def _ensure_tables(self):
-        if not self.db_config:
-            return
-        try:
-            conn = await self._db()
-            await conn.execute(
-                """CREATE TABLE IF NOT EXISTS fire_detection_sim.llm_overrides (
-                       time TIMESTAMPTZ NOT NULL,
-                       room TEXT NOT NULL,
-                       level TEXT NOT NULL,
-                       override_type TEXT NOT NULL,
-                       reason TEXT
-                   )"""
-            )
-            try:
-                await conn.execute(
-                    "SELECT create_hypertable('fire_detection_sim.llm_overrides','time',"
-                    "if_not_exists=>TRUE)"
-                )
-            except Exception:
-                pass
-            await conn.close()
-        except Exception as e:
-            logger.warning(f"ensure_tables failed: {e}")
-
     async def run(self, rooms):
         """rooms: list of (room, level). Kept for call-compat with run_full."""
         self._running = True
@@ -195,7 +170,6 @@ class FireAgent:
         for room, level in rooms:
             self.room_levels[room] = level
 
-        await self._ensure_tables()
         await self._discover_doors()
         self._mq.connect(self.mqtt_host, self.mqtt_port, keepalive=30)
         self._mq.loop_start()
