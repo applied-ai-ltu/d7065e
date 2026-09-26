@@ -4,7 +4,7 @@ Architecture (matches reference):
 - Physics engine: computes ground truth for 970 rooms across 3 floors
 - Sensor gateway: degrades truth, writes to BuildSim + MQTT
 - Pipeline consumer: MQTT -> TimescaleDB
-- Agent: reads observations from BuildSim, decides, commands actuators
+- Agent: alert-driven (MQTT from edge controllers), LLM assess + cross-floor coordinate
 - Actuator processes: travel toward commands, report state
 - Fire response is building-wide: doors unlock on ALL floors
 """
@@ -28,7 +28,6 @@ from fds.api.control import app as control_app
 from fds.api.control import sim
 from fds.buildsim.client import BuildSimClient
 from fds.config import Config
-from fds.models.detector import FireDetector
 from fds.models.evacuation import EvacuationPlanner
 from fds.models.spread import FireSpreadPredictor
 from fds.physics.engine import PhysicsEngine
@@ -274,15 +273,6 @@ async def main():
         # --- Pipeline Consumer ---
         consumer = PipelineConsumer(config)
 
-        # --- Detector ---
-        detector = FireDetector()
-        try:
-            detector.load("models/detector.pkl")
-        except FileNotFoundError:
-            from fds.models.trainer import train_detector
-
-            detector = train_detector()
-
         # --- Spread + Evacuation (combined graph, all floors) ---
         spread = FireSpreadPredictor(spread_radius=50.0)
         spread.load_graph(combined_graph)
@@ -323,13 +313,16 @@ async def main():
         # --- Agent (reads from BuildSim, building-wide response) ---
         agent = FireAgent(
             bs=bs,
-            detector=detector,
             spread_predictor=spread,
             evacuation_planner=evac,
             llm_url=config.llm.base_url,
             llm_api_key=secrets.get("litellm_api_key", ""),
             model=config.llm.model,
-            tick_interval=10.0,
+            tick_interval=5.0,
+            mqtt_host=config.mqtt.host,
+            mqtt_port=config.mqtt.port,
+            topic_prefix=config.mqtt.topic_prefix,
+            levels=LEVELS,
             db_config={
                 "host": config.database.host,
                 "port": config.database.port,

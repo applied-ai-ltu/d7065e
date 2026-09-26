@@ -59,6 +59,7 @@ FIRE_SMOKE = float(os.getenv("FIRE_SMOKE", "10"))
 FIRE_CO = float(os.getenv("FIRE_CO", "20"))
 POSSIBLE_SMOKE = float(os.getenv("POSSIBLE_SMOKE", "5"))
 REALERT_FACTOR = float(os.getenv("REALERT_FACTOR", "1.5"))  # re-alert if smoke grows by this
+ALERT_REPEAT_S = float(os.environ.get("ALERT_REPEAT_S", "60"))  # heartbeat re-alert
 
 DOOR_RELEASED = os.getenv("DOOR_RELEASED", "closed_unlocked")
 DOOR_LOCKED = os.getenv("DOOR_LOCKED", "closed_locked")
@@ -81,6 +82,7 @@ class EdgeController:
         self.door_ids: list[str] = []  # discovered fire-door actuator IDs on this floor
         self.confirmed: dict[str, dict] = {}  # room -> {"smoke":..., "co":..., "ts":...}
         self.doors_released = False
+        self._alert_sent = {}  # room -> {severity, smoke, ts}
         self.last_peer_hb = 0.0
         self.pending_cmds: asyncio.Queue = asyncio.Queue()
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -218,13 +220,26 @@ class EdgeController:
         log.warning(f"DOORS {state}: {ok}/{len(ids)} on {self.floor}")
         self.doors_released = state == DOOR_RELEASED
 
+    def _publish_alert(self, room: str, payload: dict, **kw):
+        """Alert the server on state change, on a REALERT_FACTOR rise, or every ALERT_REPEAT_S."""
+        sev = payload.get("severity", "")
+        now = time.time()
+        last = self._alert_sent.get(room)
+        if last and sev != "stand_down_refused":
+            same = last["severity"] == sev
+            grown = payload.get("smoke", 0) >= last["smoke"] * REALERT_FACTOR
+            if same and not grown and now - last["ts"] < ALERT_REPEAT_S:
+                return
+        self._alert_sent[room] = {"severity": sev, "smoke": payload.get("smoke", 0), "ts": now}
+        self.publish(f"alerts/{self.floor}/{self._safe(room)}", payload, **kw)
+
     async def _act_on_fire(self, room: str, snap: dict, escalation: str):
         if not self.is_acting:
             return
         if not self.doors_released:
             await self._set_doors(DOOR_RELEASED)
-        self.publish(
-            f"alerts/{self.floor}/{self._safe(room)}",
+        self._publish_alert(
+            room,
             {"room": room, "decision": "fire", "severity": escalation, **snap},
         )
         log.critical(f"FIRE {escalation} in {self.floor}/{room}: {snap}")
@@ -234,8 +249,8 @@ class EdgeController:
         if cmd == "stand-down":
             room = payload.get("room", "")
             if self._readings_critical(room):
-                self.publish(
-                    f"alerts/{self.floor}/{self._safe(room)}",
+                self._publish_alert(
+                    room,
                     {
                         "room": room,
                         "decision": "fire",
@@ -246,6 +261,7 @@ class EdgeController:
                 log.warning(f"REFUSED stand-down for {room}: readings still critical")
                 return
             self.confirmed.pop(room, None)
+            self._alert_sent.pop(room, None)
             if not self.confirmed and self.doors_released and self.is_acting:
                 await self._set_doors(DOOR_LOCKED)
             self.publish(
@@ -255,9 +271,15 @@ class EdgeController:
             log.info(f"STAND-DOWN accepted for {room}")
 
         elif cmd == "doors":
-            if payload.get("action") == "release" and self.is_acting:
+            action = payload.get("action")
+            if not self.is_acting:
+                return
+            if action == "release" and not self.doors_released:
                 await self._set_doors(DOOR_RELEASED)
                 log.warning("Cross-floor door release commanded by server")
+            elif action == "lock" and self.doors_released and not self.confirmed:
+                await self._set_doors(DOOR_LOCKED)
+                log.warning("Cross-floor re-lock commanded by server (all clear)")
 
         elif cmd == "evacuation":
             log.info(f"Evacuation route received: {payload.get('route')}")
@@ -284,6 +306,29 @@ class EdgeController:
                 )
             ]
 
+            # Rooms that just dropped below threshold: tell the server once, explicitly.
+            gone = getattr(self, "_prev_candidates", set()) - set(candidates)
+            for room in gone:
+                h = snapshot.get(room, {})
+
+                def last(k):
+                    return round(float(h[k][-1]), 2) if h.get(k) else 0.0
+
+                self.publish(
+                    f"decisions/{self.floor}/{self._safe(room)}",
+                    {
+                        "room": room,
+                        "decision": "clear",
+                        "smoke": last("smoke"),
+                        "co": last("co"),
+                        "temperature": last("temperature"),
+                    },
+                    qos=1,
+                )
+                self._alert_sent.pop(room, None)
+                log.info(f"CLEAR {self.floor}/{room}: below thresholds")
+            self._prev_candidates = set(candidates)
+
             fires = 0
             for room in candidates:
                 decision, snap = self._decide(room, snapshot[room])
@@ -303,8 +348,8 @@ class EdgeController:
                         self.confirmed[room] = {**snap, "ts": time.time()}
                         await self._act_on_fire(room, snap, "critical")
                 elif decision == "possible" and self.is_acting and room not in self.confirmed:
-                    self.publish(
-                        f"alerts/{self.floor}/{self._safe(room)}",
+                    self._publish_alert(
+                        room,
                         {"room": room, "decision": "possible", "severity": "warning", **snap},
                     )
 
