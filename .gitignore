@@ -93,3 +93,4 @@ docker-compose.override.yml
 **/target/
 !**/secrets.py
 !src/fds/secrets.py
+edge/detector.onnx
