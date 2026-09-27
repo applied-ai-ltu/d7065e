@@ -38,6 +38,7 @@ from fds.pipeline.schema import init_database
 from fds.secrets import get_secrets
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 LEVELS = ["level0", "level1", "level2"]

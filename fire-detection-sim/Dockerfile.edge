@@ -1,0 +1,14 @@
+# Tier-1 edge controller: threshold filter + isolation forest (ONNX) + local door actuation.
+# Built for linux/arm64 (Raspberry Pi 400) and linux/amd64 (standby node). No secrets needed.
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY edge/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY edge/edge_controller.py edge/detector.onnx ./
+
+ENV PYTHONUNBUFFERED=1 \
+    ONNX_PATH=/app/detector.onnx
+
+ENTRYPOINT ["python", "edge_controller.py"]

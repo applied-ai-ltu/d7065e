@@ -1,0 +1,18 @@
+# Tier-2 server: BuildSim physics + sensor gateway + alert-driven LLM agent + pipeline consumer.
+FROM python:3.12-slim
+
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml .
+COPY src/ src/
+COPY configs/config.yaml.example configs/config.yaml
+RUN pip install --no-cache-dir -e ".[all]"
+
+EXPOSE 8089
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONWARNINGS="ignore:Unverified HTTPS request" \
+    VAULT_ADDR="http://vault.vault.svc.cluster.local:8200"
+
+CMD ["python", "-m", "fds.run_full"]

@@ -272,7 +272,12 @@ class EdgeController:
             self._alert_sent.pop(room, None)
             if not self.confirmed:
                 self.own_release = False
-                if self.doors_released and self.is_acting and not self.server_release:
+                if (
+                    self.is_acting
+                    and not self.server_release
+                    and payload.get("floor_clear", True)
+                    and (self.doors_released or payload.get("relock"))
+                ):
                     await self._set_doors(DOOR_LOCKED)
             self.publish(
                 f"decisions/{self.floor}/{self._safe(room)}",
@@ -291,9 +296,10 @@ class EdgeController:
                     log.warning("Cross-floor door release commanded by server")
             elif action == "lock":
                 self.server_release = False
-                if self.doors_released and not self.own_release and not self.confirmed:
+                if not self.confirmed:  # authoritative: survives controller restart/failover
+                    self.own_release = False
                     await self._set_doors(DOOR_LOCKED)
-                    log.warning("Cross-floor re-lock commanded by server (all clear)")
+                    log.warning("Re-lock commanded by server (all clear)")
 
         elif cmd == "evacuation":
             log.info(f"Evacuation route received: {payload.get('route')}")
@@ -302,6 +308,8 @@ class EdgeController:
     async def tick_loop(self):
         while True:
             await asyncio.sleep(TICK_S)
+            if not self.door_ids:
+                await self._discover_doors()  # server may register actuators after we start
             with self.lock:
                 snapshot = {
                     r: {k: deque(v) for k, v in h.items()} for r, h in self.readings.items()

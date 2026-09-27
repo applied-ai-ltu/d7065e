@@ -80,6 +80,7 @@ class FireAgent:
         self._fire_start_time = {}
         self._last_alert = {}  # room -> (severity, ts)
         self._cross_floor_released = set()
+        self._had_fire = set()  # levels with a confirmed room this incident
         self._last_plan = None
 
         # Room -> level, from run(rooms). Fixes cross-floor visualisation payloads.
@@ -390,23 +391,34 @@ class FireAgent:
                     c["clear_since"] = None
 
     async def _stand_down(self, room, level, reason):
-        self._publish(f"commands/{level}/stand-down", {"room": room, "reason": reason})
+        others = (set(self._confirmed) | set(self._watch)) - {room}
+        if room in self._confirmed:
+            self._had_fire.add(level)
+        same_floor = [
+            r
+            for r in others
+            if (self._confirmed.get(r) or self._watch.get(r) or {}).get("level") == level
+        ]
+        floor_clear = not same_floor
+        relock = floor_clear and level in self._had_fire
+        self._publish(
+            f"commands/{level}/stand-down",
+            {"room": room, "reason": reason, "floor_clear": floor_clear, "relock": relock},
+        )
         await self._log_override(room, level, "stand_down", reason)
-        logger.warning(f"STAND-DOWN sent for {level}/{room}: {reason}")
-        if self._takeover.get(level):
+        logger.warning(f"STAND-DOWN sent for {level}/{room}: {reason} (floor_clear={floor_clear})")
+        if self._takeover.get(level) and floor_clear:
             await self._set_floor_doors(level, DOOR_LOCKED)
         self._last_alert.pop(room, None)
-        remaining = (set(self._confirmed) | set(self._watch)) - {room}
-        if not remaining and self._cross_floor_released:
-            for other in sorted(self._cross_floor_released):
-                if self._takeover.get(other):
-                    await self._set_floor_doors(other, DOOR_LOCKED)
+        if not others and (self._cross_floor_released or self._had_fire):
+            for lv in self.levels:
+                if self._takeover.get(lv):
+                    await self._set_floor_doors(lv, DOOR_LOCKED)
                 else:
-                    self._publish(
-                        f"commands/{other}/doors", {"action": "lock", "reason": "all clear"}
-                    )
-            logger.warning(f"ALL CLEAR: re-lock commanded on {sorted(self._cross_floor_released)}")
+                    self._publish(f"commands/{lv}/doors", {"action": "lock", "reason": "all clear"})
+            logger.warning(f"ALL CLEAR: re-lock commanded on {self.levels}")
             self._cross_floor_released.clear()
+            self._had_fire.clear()
             self._active_fire = False
 
     # ------------------------------------------------------ heartbeat/takeover
