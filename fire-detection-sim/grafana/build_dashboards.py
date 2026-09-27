@@ -199,6 +199,30 @@ def bool_override(field, true_text, false_text):
     }
 
 
+def flagged_readings(sensor_type, title, x, y, w, h, unit=None):
+    """Live readings for the rooms Tier 1 flagged (any decision) in the window."""
+    return timeseries(
+        title,
+        x,
+        y,
+        w,
+        h,
+        [
+            target(f"""
+            WITH hot AS (
+              SELECT DISTINCT room, level FROM {S}.edge_decisions
+              WHERE $__timeFilter(time) AND {NOT_META} AND {FLOOR})
+            SELECT time_bucket('10 seconds', r.time) AS time, r.level || '/' || r.room AS metric,
+                   AVG(r.value)::float AS value
+            FROM {S}.sensor_readings r JOIN hot USING (room, level)
+            WHERE r.sensor_type = '{sensor_type}' AND $__timeFilter(r.time)
+            GROUP BY 1, 2 ORDER BY 1""")
+        ],
+        unit=unit,
+        desc="Rooms that produced a Tier-1 decision in the selected window",
+    )
+
+
 def v1_panel(v1, title, x, y, w, h, new_title=None):
     """Carry a panel over from the v1 dashboard, normalised to the placeholder datasource."""
     src = next(p for p in v1["panels"] if p.get("title") == title)
@@ -481,9 +505,11 @@ def build_operations(v1):
             },
             description="Escalate immediately, de-escalate only on 60 s of clear readings",
         ),
-        v1_panel(v1, "Smoke — Top Rooms", 0, 19, 8, 8),
-        v1_panel(v1, "CO — Top Rooms", 8, 19, 8, 8),
-        v1_panel(v1, "Temperature — Top Rooms", 16, 19, 8, 8),
+        flagged_readings("smoke", "Smoke — rooms flagged by Tier 1", 0, 19, 8, 8, unit="percent"),
+        flagged_readings("co", "CO — rooms flagged by Tier 1", 8, 19, 8, 8, unit="ppm"),
+        flagged_readings(
+            "temperature", "Temperature — rooms flagged by Tier 1", 16, 19, 8, 8, unit="celsius"
+        ),
         timeseries(
             "Tier 1 — edge decisions (per 30 s)",
             0,

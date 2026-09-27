@@ -770,121 +770,166 @@
       "description": "Escalate immediately, de-escalate only on 60 s of clear readings"
     },
     {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "DS_TIMESCALE"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2
-          },
-          "unit": "percent"
-        }
-      },
+      "id": 10,
+      "type": "timeseries",
+      "title": "Smoke \u2014 rooms flagged by Tier 1",
       "gridPos": {
         "x": 0,
         "y": 19,
         "w": 8,
         "h": 8
       },
-      "id": 10,
-      "targets": [
-        {
-          "format": "time_series",
-          "rawSql": "WITH hot AS (\n            SELECT DISTINCT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'smoke' AND value > 1.0\n            AND $__timeFilter(time) AND level IN (${floor:singlequote})\n        )\n        SELECT r.time, r.level || '/' || r.room AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN hot h ON r.room = h.room AND r.level = h.level\n        WHERE r.sensor_type = 'smoke' AND $__timeFilter(r.time)\n        ORDER BY r.time",
-          "refId": "A",
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "DS_TIMESCALE"
-          }
-        }
-      ],
-      "title": "Smoke \u2014 Top Rooms",
-      "type": "timeseries",
-      "description": " (carried over from v1)"
-    },
-    {
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "DS_TIMESCALE"
       },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH hot AS ( SELECT DISTINCT room, level FROM fire_detection_sim.edge_decisions WHERE $__timeFilter(time) AND room NOT LIKE '\\_%' AND level IN (${floor:singlequote})) SELECT time_bucket('10 seconds', r.time) AS time, r.level || '/' || r.room AS metric, AVG(r.value)::float AS value FROM fire_detection_sim.sensor_readings r JOIN hot USING (room, level) WHERE r.sensor_type = 'smoke' AND $__timeFilter(r.time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2
-          },
-          "unit": "ppm"
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       },
+      "description": "Rooms that produced a Tier-1 decision in the selected window"
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "CO \u2014 rooms flagged by Tier 1",
       "gridPos": {
         "x": 8,
         "y": 19,
         "w": 8,
         "h": 8
       },
-      "id": 11,
-      "targets": [
-        {
-          "format": "time_series",
-          "rawSql": "WITH hot AS (\n            SELECT DISTINCT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'co' AND value > 5.0\n            AND $__timeFilter(time) AND level IN (${floor:singlequote})\n        )\n        SELECT r.time, r.level || '/' || r.room AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN hot h ON r.room = h.room AND r.level = h.level\n        WHERE r.sensor_type = 'co' AND $__timeFilter(r.time)\n        ORDER BY r.time",
-          "refId": "A",
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "DS_TIMESCALE"
-          }
-        }
-      ],
-      "title": "CO \u2014 Top Rooms",
-      "type": "timeseries",
-      "description": " (carried over from v1)"
-    },
-    {
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "DS_TIMESCALE"
       },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH hot AS ( SELECT DISTINCT room, level FROM fire_detection_sim.edge_decisions WHERE $__timeFilter(time) AND room NOT LIKE '\\_%' AND level IN (${floor:singlequote})) SELECT time_bucket('10 seconds', r.time) AS time, r.level || '/' || r.room AS metric, AVG(r.value)::float AS value FROM fire_detection_sim.sensor_readings r JOIN hot USING (room, level) WHERE r.sensor_type = 'co' AND $__timeFilter(r.time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2
-          },
-          "unit": "celsius"
+          "unit": "ppm"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       },
+      "description": "Rooms that produced a Tier-1 decision in the selected window"
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Temperature \u2014 rooms flagged by Tier 1",
       "gridPos": {
         "x": 16,
         "y": 19,
         "w": 8,
         "h": 8
       },
-      "id": 12,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
       "targets": [
         {
-          "format": "time_series",
-          "rawSql": "WITH hot AS (\n            SELECT DISTINCT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'temperature' AND value > 25.0\n            AND $__timeFilter(time) AND level IN (${floor:singlequote})\n        )\n        SELECT r.time, r.level || '/' || r.room AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN hot h ON r.room = h.room AND r.level = h.level\n        WHERE r.sensor_type = 'temperature' AND $__timeFilter(r.time)\n        ORDER BY r.time",
           "refId": "A",
           "datasource": {
             "type": "grafana-postgresql-datasource",
             "uid": "DS_TIMESCALE"
-          }
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH hot AS ( SELECT DISTINCT room, level FROM fire_detection_sim.edge_decisions WHERE $__timeFilter(time) AND room NOT LIKE '\\_%' AND level IN (${floor:singlequote})) SELECT time_bucket('10 seconds', r.time) AS time, r.level || '/' || r.room AS metric, AVG(r.value)::float AS value FROM fire_detection_sim.sensor_readings r JOIN hot USING (room, level) WHERE r.sensor_type = 'temperature' AND $__timeFilter(r.time) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
-      "title": "Temperature \u2014 Top Rooms",
-      "type": "timeseries",
-      "description": " (carried over from v1)"
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Rooms that produced a Tier-1 decision in the selected window"
     },
     {
       "id": 13,
