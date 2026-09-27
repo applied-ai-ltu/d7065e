@@ -53,7 +53,7 @@ def test_stuck_sensor_freezes():
     import random
     import time
 
-    random.seed(1)  # a stuck sensor recovers with 5% probability per tick; keep the test deterministic
+    random.seed(1)  # stuck sensors recover with 5% probability per tick; keep it deterministic
     now = time.time()
     val1 = gw._degrade(sensor, 21.0, now)
     val2 = gw._degrade(sensor, 25.0, now + 1)
