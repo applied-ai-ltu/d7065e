@@ -1,0 +1,1178 @@
+{
+  "uid": "731d813a-12da-44c0-97b4-91099ea1a1cc",
+  "title": "D7065E Fire Detection \u2014 Operations",
+  "tags": [
+    "d7065e",
+    "operations"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "floor",
+        "label": "Floor",
+        "type": "custom",
+        "multi": true,
+        "includeAll": true,
+        "allValue": "'level0','level1','level2'",
+        "query": "level0,level1,level2",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "level0",
+            "value": "level0"
+          },
+          {
+            "selected": false,
+            "text": "level1",
+            "value": "level1"
+          },
+          {
+            "selected": false,
+            "text": "level2",
+            "value": "level2"
+          }
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "DS_TIMESCALE"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "red",
+        "name": "Tier-2 events",
+        "target": {
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time, override_type || ' ' || level || '/' || room AS text, override_type AS tags FROM fire_detection_sim.llm_overrides WHERE $__timeFilter(time) AND override_type IN ('confirm','escalated','stand_down','failover','server_takeover','server_handback')"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Edge controllers alive",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, 'of 6' AS metric, COUNT(*)::float AS value FROM ( SELECT level, role FROM fire_detection_sim.heartbeats WHERE time > NOW() - INTERVAL '30 seconds' GROUP BY level, role) h"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3
+              },
+              {
+                "color": "green",
+                "value": 6
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "Controllers (active+standby per floor) that sent a heartbeat in the last 30 s"
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Confirmed fires",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, 'rooms' AS metric, COUNT(*)::float AS value FROM ( SELECT DISTINCT ON (room) room, level, override_type FROM fire_detection_sim.llm_overrides WHERE room NOT LIKE '\\_%' AND time > NOW() - INTERVAL '3 hours' AND override_type IN ('confirm','escalated','stand_down_refused','watch_pending','stand_down') ORDER BY room, time DESC) r WHERE override_type IN ('confirm','escalated','stand_down_refused')"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "Rooms whose latest Tier-2 verdict is confirmed / escalated / stand-down refused"
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Rooms on watch",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, 'rooms' AS metric, COUNT(*)::float AS value FROM ( SELECT DISTINCT ON (room) room, level, override_type FROM fire_detection_sim.llm_overrides WHERE room NOT LIKE '\\_%' AND time > NOW() - INTERVAL '3 hours' AND override_type IN ('confirm','escalated','stand_down_refused','watch_pending','stand_down') ORDER BY room, time DESC) r WHERE override_type = 'watch_pending'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "LLM doubted the edge alert; readings watched for 60 s before any stand-down"
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Floors with doors released",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, 'floors' AS metric, COUNT(*)::float AS value FROM ( SELECT DISTINCT ON (level) level, decision FROM fire_detection_sim.edge_decisions WHERE room = '_doors' AND time > NOW() - INTERVAL '3 hours' ORDER BY level, time DESC) d WHERE decision = 'doors_released'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "Latest door action reported by each floor controller"
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Server takeover",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, 'floors' AS metric, COUNT(*)::float AS value FROM ( SELECT DISTINCT ON (level) level, override_type FROM fire_detection_sim.llm_overrides WHERE override_type IN ('server_takeover','server_handback') AND time > NOW() - INTERVAL '3 hours' ORDER BY level, time DESC) t WHERE override_type = 'server_takeover'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "purple",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "Floors where both controllers are silent and the server is covering"
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Sensor feed (rooms/min)",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, 'rooms' AS metric, COUNT(DISTINCT room)::float AS value FROM fire_detection_sim.sensor_readings WHERE time > NOW() - INTERVAL '1 minute' AND level IN (${floor:singlequote})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Edge controllers",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT level, role, node, EXTRACT(EPOCH FROM NOW() - MAX(time)) < 30 AS alive, BOOL_OR(acting) FILTER (WHERE time > NOW() - INTERVAL '30 seconds') AS acting, MAX(time) AS last_seen FROM fire_detection_sim.heartbeats WHERE time > NOW() - INTERVAL '1 hour' GROUP BY level, role, node ORDER BY level, role"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "alive"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "true": {
+                        "text": "alive",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "false": {
+                        "text": "SILENT",
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "acting"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "true": {
+                        "text": "ACTING",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "false": {
+                        "text": "standby",
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "description": "Active on the Pi, standby on infinity-magic. A standby promotes after 30 s of silence."
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Door state per floor",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT DISTINCT ON (level) level, node, decision AS doors, time FROM fire_detection_sim.edge_decisions WHERE room = '_doors' AND time > NOW() - INTERVAL '3 hours' ORDER BY level, time DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "doors"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "doors_released": {
+                        "text": "RELEASED",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "doors_locked": {
+                        "text": "locked",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "state-timeline",
+      "title": "Incident timeline (Tier-2 verdict per room)",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time, level || '/' || room AS metric, CASE override_type WHEN 'stand_down' THEN 1 WHEN 'watch_pending' THEN 2 WHEN 'stand_down_refused' THEN 3 WHEN 'confirm' THEN 4 WHEN 'escalated' THEN 5 END::float AS value FROM fire_detection_sim.llm_overrides WHERE $__timeFilter(time) AND room NOT LIKE '\\_%' AND level IN (${floor:singlequote}) AND override_type IN ('confirm','escalated','stand_down_refused','watch_pending','stand_down') ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "stood down",
+                  "color": "green",
+                  "index": 0
+                },
+                "2": {
+                  "text": "watching",
+                  "color": "orange",
+                  "index": 1
+                },
+                "3": {
+                  "text": "stand-down refused",
+                  "color": "purple",
+                  "index": 2
+                },
+                "4": {
+                  "text": "confirmed",
+                  "color": "red",
+                  "index": 3
+                },
+                "5": {
+                  "text": "escalated",
+                  "color": "dark-red",
+                  "index": 4
+                }
+              }
+            }
+          ],
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "description": "Escalate immediately, de-escalate only on 60 s of clear readings"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 8,
+        "h": 8
+      },
+      "id": 10,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "WITH hot AS (\n            SELECT DISTINCT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'smoke' AND value > 1.0\n            AND $__timeFilter(time) AND level IN (${floor:singlequote})\n        )\n        SELECT r.time, r.level || '/' || r.room AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN hot h ON r.room = h.room AND r.level = h.level\n        WHERE r.sensor_type = 'smoke' AND $__timeFilter(r.time)\n        ORDER BY r.time",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          }
+        }
+      ],
+      "title": "Smoke \u2014 Top Rooms",
+      "type": "timeseries",
+      "description": " (carried over from v1)"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "ppm"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 19,
+        "w": 8,
+        "h": 8
+      },
+      "id": 11,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "WITH hot AS (\n            SELECT DISTINCT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'co' AND value > 5.0\n            AND $__timeFilter(time) AND level IN (${floor:singlequote})\n        )\n        SELECT r.time, r.level || '/' || r.room AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN hot h ON r.room = h.room AND r.level = h.level\n        WHERE r.sensor_type = 'co' AND $__timeFilter(r.time)\n        ORDER BY r.time",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          }
+        }
+      ],
+      "title": "CO \u2014 Top Rooms",
+      "type": "timeseries",
+      "description": " (carried over from v1)"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "celsius"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 19,
+        "w": 8,
+        "h": 8
+      },
+      "id": 12,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "WITH hot AS (\n            SELECT DISTINCT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'temperature' AND value > 25.0\n            AND $__timeFilter(time) AND level IN (${floor:singlequote})\n        )\n        SELECT r.time, r.level || '/' || r.room AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN hot h ON r.room = h.room AND r.level = h.level\n        WHERE r.sensor_type = 'temperature' AND $__timeFilter(r.time)\n        ORDER BY r.time",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          }
+        }
+      ],
+      "title": "Temperature \u2014 Top Rooms",
+      "type": "timeseries",
+      "description": " (carried over from v1)"
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Tier 1 \u2014 edge decisions (per 30 s)",
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time_bucket('30 seconds', time) AS time, decision AS metric, COUNT(*)::float AS value FROM fire_detection_sim.edge_decisions WHERE $__timeFilter(time) AND kind = 'decision' AND room NOT LIKE '\\_%' AND level IN (${floor:singlequote}) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "drawStyle": "bars"
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "normal = threshold candidate rejected by the IF; possible/fire = escalated to the server; clear = room back below thresholds"
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Tier 2 \u2014 LLM verdicts (per 30 s)",
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time_bucket('30 seconds', time) AS time, override_type AS metric, COUNT(*)::float AS value FROM fire_detection_sim.llm_overrides WHERE $__timeFilter(time) AND room NOT LIKE '\\_%' AND level IN (${floor:singlequote}) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "drawStyle": "bars"
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Incident log (Tier 2)",
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time, level || '/' || room AS location, override_type AS event, reason FROM fire_detection_sim.llm_overrides WHERE $__timeFilter(time) AND level IN (${floor:singlequote}) ORDER BY time DESC LIMIT 100"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "event"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "confirm": {
+                        "text": "confirmed",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "escalated": {
+                        "text": "escalated",
+                        "color": "dark-red",
+                        "index": 1
+                      },
+                      "stand_down_refused": {
+                        "text": "stand-down refused",
+                        "color": "purple",
+                        "index": 2
+                      },
+                      "watch_pending": {
+                        "text": "watching",
+                        "color": "orange",
+                        "index": 3
+                      },
+                      "stand_down": {
+                        "text": "stood down",
+                        "color": "green",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Edge alerts (Tier 1)",
+      "gridPos": {
+        "x": 12,
+        "y": 35,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time, level || '/' || room AS location, node, severity, ROUND(smoke::numeric, 1) AS smoke, ROUND(co::numeric, 1) AS co, ROUND(temperature::numeric, 1) AS temp, if_anomaly, if_ms FROM fire_detection_sim.edge_decisions WHERE kind = 'alert' AND $__timeFilter(time) AND level IN (${floor:singlequote}) ORDER BY time DESC LIMIT 100"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 7
+      },
+      "id": 17,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT time, event_type, level || '/' || room AS location, severity, details::text FROM fire_detection_sim.fire_events WHERE $__timeFilter(time) AND level IN (${floor:singlequote}) ORDER BY time DESC LIMIT 30",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          }
+        }
+      ],
+      "title": "LLM assessments (fire_events)",
+      "type": "table",
+      "description": " (carried over from v1)"
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}

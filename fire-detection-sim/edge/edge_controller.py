@@ -226,6 +226,11 @@ class EdgeController:
         ok = sum(1 for x in results if x)
         log.warning(f"DOORS {state}: {ok}/{len(ids)} on {self.floor}")
         self.doors_released = state == DOOR_RELEASED
+        # Door state for the operations dashboard (no smoke key, so the server ignores it)
+        door_state = "doors_released" if self.doors_released else "doors_locked"
+        self.publish(
+            f"decisions/{self.floor}/_doors", {"room": "_doors", "decision": door_state}, qos=1
+        )
 
     def _publish_alert(self, room: str, payload: dict, **kw):
         """Alert the server on state change, on a REALERT_FACTOR rise, or every ALERT_REPEAT_S."""
@@ -422,7 +427,15 @@ class EdgeController:
     async def run(self):
         self.loop = asyncio.get_running_loop()
         await self._discover_doors()
-        self.mq.connect(MQTT_BROKER, MQTT_PORT, keepalive=30)
+        delay = 2
+        while True:  # DNS not ready, broker down, network blip: keep trying, never crash
+            try:
+                self.mq.connect(MQTT_BROKER, MQTT_PORT, keepalive=30)
+                break
+            except OSError as e:
+                log.warning(f"MQTT connect failed: {e}; retry in {delay}s")
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 30)
         self.mq.loop_start()
         log.info(
             f"Edge controller {self.floor}/{self.role} on {self.node} "

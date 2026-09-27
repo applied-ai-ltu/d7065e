@@ -1,0 +1,818 @@
+{
+  "id": 3,
+  "links": [
+    {
+      "icon": "bolt",
+      "targetBlank": true,
+      "title": "\ud83d\udcca Technical Dashboard",
+      "type": "link",
+      "url": "/d/tech-d7065e/d7065e-technical"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'rooms' AS metric, COUNT(DISTINCT room)::float AS value FROM fire_detection_sim.sensor_readings WHERE time > NOW() - INTERVAL '1 minute' AND level IN (${floor:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Active Rooms",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, ROUND(MAX(value)::numeric, 1)::float AS value FROM fire_detection_sim.sensor_readings WHERE sensor_type = 'smoke' AND time > NOW() - INTERVAL '1 minute' AND level IN (${floor:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Max Smoke",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          },
+          "unit": "ppm"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "id": 13,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, ROUND(MAX(value)::numeric, 1)::float AS value FROM fire_detection_sim.sensor_readings WHERE sensor_type = 'co' AND time > NOW() - INTERVAL '1 minute' AND level IN (${floor:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Max CO",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 40
+              }
+            ]
+          },
+          "unit": "celsius"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, ROUND(MAX(value)::numeric, 1)::float AS value FROM fire_detection_sim.sensor_readings WHERE sensor_type = 'temperature' AND time > NOW() - INTERVAL '1 minute' AND level IN (${floor:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Max Temperature",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "severity"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 10,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT DISTINCT ON (room, level) time, level || '/' || room AS location, severity FROM fire_detection_sim.fire_events WHERE $__timeFilter(time) AND event_type = 'fire_detected' AND level IN (${floor:singlequote}) ORDER BY room, level, time DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "\ud83d\udd25 Active Fires",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 4
+      },
+      "id": 1,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "WITH hot AS (\n            SELECT DISTINCT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'smoke' AND value > 1.0\n            AND $__timeFilter(time) AND level IN (${floor:singlequote})\n        )\n        SELECT r.time, r.level || '/' || r.room AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN hot h ON r.room = h.room AND r.level = h.level\n        WHERE r.sensor_type = 'smoke' AND $__timeFilter(r.time)\n        ORDER BY r.time",
+          "refId": "A"
+        }
+      ],
+      "title": "Smoke \u2014 Top Rooms",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "ppm"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 4
+      },
+      "id": 2,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "WITH hot AS (\n            SELECT DISTINCT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'co' AND value > 5.0\n            AND $__timeFilter(time) AND level IN (${floor:singlequote})\n        )\n        SELECT r.time, r.level || '/' || r.room AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN hot h ON r.room = h.room AND r.level = h.level\n        WHERE r.sensor_type = 'co' AND $__timeFilter(r.time)\n        ORDER BY r.time",
+          "refId": "A"
+        }
+      ],
+      "title": "CO \u2014 Top Rooms",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "celsius"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 4
+      },
+      "id": 3,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "WITH hot AS (\n            SELECT DISTINCT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'temperature' AND value > 25.0\n            AND $__timeFilter(time) AND level IN (${floor:singlequote})\n        )\n        SELECT r.time, r.level || '/' || r.room AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN hot h ON r.room = h.room AND r.level = h.level\n        WHERE r.sensor_type = 'temperature' AND $__timeFilter(r.time)\n        ORDER BY r.time",
+          "refId": "A"
+        }
+      ],
+      "title": "Temperature \u2014 Top Rooms",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 5,
+            "lineWidth": 2
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "smoke"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FF9830",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "co"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#B877D9",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "temperature"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#F2495C",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "id": 8,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "WITH fire_room AS (\n            SELECT room, level FROM fire_detection_sim.sensor_readings\n            WHERE sensor_type = 'smoke' AND $__timeFilter(time) AND level IN (${floor:singlequote})\n            GROUP BY room, level ORDER BY MAX(value) DESC LIMIT 1\n        )\n        SELECT r.time, r.sensor_type AS metric, r.value\n        FROM fire_detection_sim.sensor_readings r\n        JOIN fire_room f ON r.room = f.room AND r.level = f.level\n        WHERE $__timeFilter(r.time) ORDER BY r.time",
+          "refId": "A"
+        }
+      ],
+      "title": "Fire Room Correlation (all sensors)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 5,
+      "options": {
+        "filterable": true,
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "max"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT bucket as time, sensor_type, room, level,\n            ROUND(avg_value::numeric, 2) as avg,\n            ROUND(max_value::numeric, 2) as max,\n            ROUND(stddev_value::numeric, 2) as stddev,\n            sample_count as samples\n        FROM fire_detection_sim.sensor_stats_1m\n        WHERE $__timeFilter(bucket) AND level IN (${floor:singlequote})\n        ORDER BY max_value DESC, bucket DESC\n        LIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Sensor Statistics",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "id": 6,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT time, event_type, level || '/' || room AS location, severity, details::text FROM fire_detection_sim.fire_events WHERE $__timeFilter(time) AND level IN (${floor:singlequote}) ORDER BY time DESC LIMIT 30",
+          "refId": "A"
+        }
+      ],
+      "title": "Fire Events",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 27
+      },
+      "id": 18,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'rooms' AS metric,\n            COUNT(DISTINCT room)::float AS value\n            FROM fire_detection_sim.sensor_readings\n            WHERE time > NOW() - INTERVAL '1 minute'\n            AND sensor_type = 'smoke' AND value > 2.0\n            AND level IN (${floor:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Anomaly Count (1 min)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No fires",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 27
+      },
+      "id": 19,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT time, 'latency' AS metric,\n            EXTRACT(EPOCH FROM (time - LAG(time) OVER (ORDER BY time)))::float AS value\n            FROM fire_detection_sim.fire_events\n            WHERE $__timeFilter(time)\n            ORDER BY time DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Agent Response Time",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 27
+      },
+      "id": 20,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'sprinklers' AS metric,\n            COUNT(DISTINCT room)::float AS value\n            FROM fire_detection_sim.fire_events\n            WHERE time > NOW() - INTERVAL '5 minutes'\n            AND event_type = 'fire_detected'\n            AND severity = 'critical'\n            AND level IN (${floor:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Sprinklers Active",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 27
+      },
+      "id": 21,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, level AS metric, COUNT(DISTINCT room)::float AS value FROM fire_detection_sim.sensor_readings WHERE time > NOW() - INTERVAL '1 minute' GROUP BY level ORDER BY level",
+          "refId": "A"
+        }
+      ],
+      "title": "Rooms per Floor",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No smoke",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "orange",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "id": 22,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time,\n            level || '/' || room AS metric,\n            ROUND(MAX(value)::numeric, 1)::float AS value\n        FROM fire_detection_sim.sensor_readings\n        WHERE sensor_type = 'smoke'\n        AND time > NOW() - INTERVAL '5 minutes'\n        AND value > 1.0\n        AND level IN (${floor:singlequote})\n        GROUP BY level, room\n        ORDER BY MAX(value) DESC\n        LIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "Fire Spread (Top 10 rooms by smoke)",
+      "type": "bargauge"
+    }
+  ],
+  "refresh": "5s",
+  "tags": [
+    "d7065e",
+    "fire-detection"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Floor",
+        "multi": false,
+        "name": "floor",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "text": "level0",
+            "value": "level0"
+          },
+          {
+            "text": "level1",
+            "value": "level1"
+          },
+          {
+            "text": "level2",
+            "value": "level2"
+          }
+        ],
+        "query": "level0,level1,level2",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "dfyc5hiyx30u8b"
+        },
+        "includeAll": true,
+        "label": "Room",
+        "multi": true,
+        "name": "room",
+        "query": "SELECT DISTINCT room FROM fire_detection_sim.sensor_readings WHERE time > NOW() - INTERVAL '10 minutes' AND level IN (${floor:singlequote}) ORDER BY room",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-5m",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "D7065E Fire Detection System",
+  "uid": "731d813a-12da-44c0-97b4-91099ea1a1cc",
+  "version": 28
+}

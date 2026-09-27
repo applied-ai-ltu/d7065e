@@ -1,0 +1,948 @@
+{
+  "uid": "tech-d7065e",
+  "title": "D7065E Technical \u2014 Edge & Pipeline",
+  "tags": [
+    "d7065e",
+    "technical"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "DS_TIMESCALE"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "purple",
+        "name": "Tier-2 events",
+        "target": {
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time, override_type || ' ' || level || '/' || room AS text, override_type AS tags FROM fire_detection_sim.llm_overrides WHERE $__timeFilter(time) AND override_type IN ('failover','server_takeover','server_handback')"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "IF latency p50 by node",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, node AS metric, percentile_cont(0.5) WITHIN GROUP (ORDER BY if_ms)::float AS value FROM fire_detection_sim.edge_decisions WHERE if_ms IS NOT NULL AND $__timeFilter(time) GROUP BY node"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "unit": "ms",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "Isolation-forest ONNX inference per room, measured on the edge"
+    },
+    {
+      "id": 19,
+      "type": "stat",
+      "title": "IF latency p95 by node",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, node AS metric, percentile_cont(0.95) WITHIN GROUP (ORDER BY if_ms)::float AS value FROM fire_detection_sim.edge_decisions WHERE if_ms IS NOT NULL AND $__timeFilter(time) GROUP BY node"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "unit": "ms",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "Alert \u2192 LLM verdict p50",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, 'latency' AS metric, percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM time - t_alert))::float AS value FROM ( SELECT o.time, o.room, o.override_type, (SELECT MAX(a.time) FROM fire_detection_sim.edge_decisions a WHERE a.kind = 'alert' AND a.room = o.room AND a.time BETWEEN o.time - INTERVAL '120 seconds' AND o.time) AS t_alert FROM fire_detection_sim.llm_overrides o WHERE o.override_type IN ('confirm','watch_pending') AND $__timeFilter(o.time)) v WHERE t_alert IS NOT NULL"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "unit": "s",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "Edge alert published -> Tier-2 verdict logged (includes LLM inference)"
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Edge decisions",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, 'rows' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.edge_decisions WHERE kind = 'decision' AND room NOT LIKE '\\_%' AND $__timeFilter(time)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "LLM assessments",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, 'calls' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.llm_overrides WHERE override_type IN ('confirm','watch_pending') AND $__timeFilter(time)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "IF inference latency p95 by node (1 min)",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time_bucket('1 minute', time) AS time, node AS metric, percentile_cont(0.95) WITHIN GROUP (ORDER BY if_ms)::float AS value FROM fire_detection_sim.edge_decisions WHERE if_ms IS NOT NULL AND $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Pi 400 (arm64) vs infinity-magic (amd64, standby) vs proart (server takeover)"
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Alert \u2192 LLM verdict latency",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time, override_type AS metric, EXTRACT(EPOCH FROM time - t_alert)::float AS value FROM ( SELECT o.time, o.room, o.override_type, (SELECT MAX(a.time) FROM fire_detection_sim.edge_decisions a WHERE a.kind = 'alert' AND a.room = o.room AND a.time BETWEEN o.time - INTERVAL '120 seconds' AND o.time) AS t_alert FROM fire_detection_sim.llm_overrides o WHERE o.override_type IN ('confirm','watch_pending') AND $__timeFilter(o.time)) v WHERE t_alert IS NOT NULL ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "always",
+            "drawStyle": "points",
+            "pointSize": 6
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Heartbeats per minute per controller",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time_bucket('1 minute', time) AS time, level || '/' || role AS metric, COUNT(*)::float AS value FROM fire_detection_sim.heartbeats WHERE $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Expected 6/min per controller (10 s interval). A gap is an outage."
+    },
+    {
+      "id": 26,
+      "type": "table",
+      "title": "Failover / takeover events",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time, level, override_type AS event, reason FROM fire_detection_sim.llm_overrides WHERE override_type IN ('failover','server_takeover','server_handback') AND $__timeFilter(time) ORDER BY time DESC LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "event"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "failover": {
+                        "text": "standby promoted",
+                        "color": "orange",
+                        "index": 0
+                      },
+                      "server_takeover": {
+                        "text": "SERVER TAKEOVER",
+                        "color": "purple",
+                        "index": 1
+                      },
+                      "server_handback": {
+                        "text": "handed back",
+                        "color": "green",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 27,
+      "type": "bargauge",
+      "title": "Tier-2 verdict on edge alerts",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH a AS ( SELECT time, room FROM fire_detection_sim.edge_decisions WHERE kind = 'alert' AND severity IN ('warning','confirmed','critical') AND $__timeFilter(time)), v AS ( SELECT (SELECT o.override_type FROM fire_detection_sim.llm_overrides o WHERE o.room = a.room AND o.time BETWEEN a.time AND a.time + INTERVAL '60 seconds' ORDER BY o.time LIMIT 1) AS llm FROM a) SELECT NOW() AS time, CASE WHEN llm = 'confirm' THEN 'LLM confirmed' WHEN llm = 'watch_pending' THEN 'LLM doubted' ELSE 'not re-assessed (dedupe)' END AS metric, COUNT(*)::float AS value FROM v GROUP BY 2 ORDER BY 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "namePlacement": "left",
+        "sizing": "auto"
+      },
+      "description": "What Tier 2 made of each Tier-1 alert"
+    },
+    {
+      "id": 28,
+      "type": "bargauge",
+      "title": "Tier-1 decision mix by node",
+      "gridPos": {
+        "x": 8,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, node || ' ' || decision AS metric, COUNT(*)::float AS value FROM fire_detection_sim.edge_decisions WHERE kind = 'decision' AND room NOT LIKE '\\_%' AND $__timeFilter(time) GROUP BY 2 ORDER BY 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "namePlacement": "left",
+        "sizing": "auto"
+      }
+    },
+    {
+      "id": 29,
+      "type": "bargauge",
+      "title": "Tier-2 verdict mix",
+      "gridPos": {
+        "x": 16,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, override_type AS metric, COUNT(*)::float AS value FROM fire_detection_sim.llm_overrides WHERE $__timeFilter(time) GROUP BY 2 ORDER BY 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "namePlacement": "left",
+        "sizing": "auto"
+      }
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "Pipeline throughput (rows/min)",
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time_bucket('1 minute', time) AS time, 'sensor_readings' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.sensor_readings WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time_bucket('1 minute', time) AS time, 'edge_decisions' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.edge_decisions WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time_bucket('1 minute', time) AS time, 'heartbeats' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.heartbeats WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sensor_readings"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "Table sizes (approx. rows)",
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT NOW() AS time, t AS metric, approximate_row_count('fire_detection_sim.' || t)::float AS value FROM unnest(ARRAY['sensor_readings','edge_decisions','heartbeats','llm_overrides','fire_events']) AS t"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "none in window",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 24,
+        "h": 4
+      },
+      "id": 32,
+      "options": {
+        "content": "### \ud83d\udd17 External Monitoring\n\n| Tool | URL | Purpose |\n|---|---|---|\n| **Phoenix Traces** | [Open Phoenix](https://homelab:30600) | LLM call traces, latency, tokens |\n| **ClearML** | [Open ClearML](https://homelab:30808) | Model training runs, detector versions |\n| **BuildSim 3D** | [Open BuildSim](http://192.168.68.67:30909) | 3D building viewer with room highlights |\n| **Control API** | [Open Swagger](http://192.168.68.67:8089/docs) | Trigger fires, check status |\n",
+        "mode": "markdown"
+      },
+      "title": "External Tools",
+      "type": "text",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "description": " (carried over from v1)"
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}

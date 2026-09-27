@@ -1,0 +1,271 @@
+{
+  "id": 4,
+  "links": [
+    {
+      "icon": "fire",
+      "targetBlank": true,
+      "title": "\ud83d\udd25 Operations Dashboard",
+      "type": "link",
+      "url": "/d/731d813a-12da-44c0-97b4-91099ea1a1cc/d7065e-fire-detection-system"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 20
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('1 minute', time) AS time, 'readings/min' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.sensor_readings WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Pipeline Health (readings/min)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'Total Readings' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.sensor_readings WHERE $__timeFilter(time)",
+          "refId": "A"
+        },
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'Active Rooms' AS metric, COUNT(DISTINCT room)::float AS value FROM fire_detection_sim.sensor_readings WHERE time > NOW() - INTERVAL '1 minute'",
+          "refId": "B"
+        },
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'Fire Events' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.fire_events WHERE $__timeFilter(time)",
+          "refId": "C"
+        },
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'Sensor Types' AS metric, COUNT(DISTINCT sensor_type)::float AS value FROM fire_detection_sim.sensor_readings WHERE time > NOW() - INTERVAL '1 minute'",
+          "refId": "D"
+        }
+      ],
+      "title": "Pipeline Stats",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 15
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('1 minute', time) AS time, level AS metric, COUNT(*)::float AS value FROM fire_detection_sim.sensor_readings WHERE $__timeFilter(time) GROUP BY 1, level ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Throughput per Floor",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 15
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('1 minute', time) AS time, sensor_type AS metric, COUNT(*)::float AS value FROM fire_detection_sim.sensor_readings WHERE $__timeFilter(time) GROUP BY 1, sensor_type ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Readings per Sensor Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 15
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT time,\n                    EXTRACT(EPOCH FROM (time - LAG(time) OVER (ORDER BY time)))::float AS interval_sec\n                FROM fire_detection_sim.fire_events\n                WHERE $__timeFilter(time)\n                ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Agent Response Times",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "dfyc5hiyx30u8b"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'sensor_readings' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.sensor_readings",
+          "refId": "A"
+        },
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'fire_events' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.fire_events",
+          "refId": "B"
+        },
+        {
+          "format": "time_series",
+          "rawSql": "SELECT NOW() AS time, 'actuator_events' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.actuator_events",
+          "refId": "C"
+        }
+      ],
+      "title": "Database Size",
+      "type": "stat"
+    },
+    {
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "content": "### \ud83d\udd17 External Monitoring\n\n| Tool | URL | Purpose |\n|---|---|---|\n| **Phoenix Traces** | [Open Phoenix](https://homelab:30600) | LLM call traces, latency, tokens |\n| **ClearML** | [Open ClearML](https://homelab:30808) | Model training runs, detector versions |\n| **BuildSim 3D** | [Open BuildSim](http://192.168.68.67:30909) | 3D building viewer with room highlights |\n| **Control API** | [Open Swagger](http://192.168.68.67:8089/docs) | Trigger fires, check status |\n",
+        "mode": "markdown"
+      },
+      "title": "External Tools",
+      "type": "text"
+    }
+  ],
+  "refresh": "10s",
+  "tags": [
+    "d7065e",
+    "technical"
+  ],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "D7065E Technical \u2014 System Health",
+  "uid": "tech-d7065e",
+  "version": 1
+}
