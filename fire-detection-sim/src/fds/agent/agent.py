@@ -234,6 +234,7 @@ class FireAgent:
             await self._log_override(room, level, "stand_down_refused", p.get("reason", ""))
             self._watch.pop(room, None)
             self._confirmed[room] = {"level": level, "clear_since": None}
+            self._had_fire.add(level)
             return
 
         now = time.time()
@@ -286,6 +287,7 @@ class FireAgent:
             # CONFIRM: enhance + coordinate. Edge already acted on its floor.
             self._watch.pop(room, None)
             self._confirmed[room] = {"level": level, "clear_since": None}
+            self._had_fire.add(level)
             await self._execute(plan, risk_rooms, evac_routes)
             await self._coordinate(room, level, evac_routes, reason=assessment.get("reasoning", ""))
             await self._log_override(room, level, "confirm", f"conf={conf:.2f}")
@@ -349,46 +351,50 @@ class FireAgent:
         """Safety asymmetry: de-escalate slowly, on readings, never on one LLM opinion."""
         while self._running:
             await asyncio.sleep(5)
-            now = time.time()
-            # Doubted rooms
-            for room, w in list(self._watch.items()):
-                if now - w["since"] < STAND_DOWN_WAIT_S:
-                    continue
-                snap = self._latest.get(room, {})
-                smoke, co = snap.get("smoke", 99), snap.get("co", 99)
-                clear = smoke < CLEAR_SMOKE and co < CLEAR_CO
-                fire_level = smoke >= TAKEOVER_FIRE_SMOKE and co >= TAKEOVER_FIRE_CO
-                if clear:
-                    await self._stand_down(room, w["level"], "LLM false alarm + readings clear 60s")
-                    self._watch.pop(room, None)
-                elif fire_level:
-                    logger.warning(
-                        f"ESCALATE {w['level']}/{room}: LLM doubted it but readings at fire level "
-                        f"(smoke={smoke}, co={co})"
-                    )
-                    self._confirmed[room] = {"level": w["level"], "clear_since": None}
-                    await self._release_floor(w["level"], room, "server escalation")
-                    await self._coordinate(room, w["level"], [], reason="escalated after watch")
-                    await self._log_override(room, w["level"], "escalated", "escalated: fire-level")
-                    self._watch.pop(room, None)
-                else:
-                    w["since"] = now  # neither clear nor fire-level: keep watching
-                    logger.info(
-                        f"WATCH {w['level']}/{room}: elevated but not fire-level "
-                        f"(smoke={smoke}, co={co}); watching another {STAND_DOWN_WAIT_S}s"
-                    )
-            # Confirmed fires that have gone out
-            for room, c in list(self._confirmed.items()):
-                snap = self._latest.get(room, {})
-                clear = snap.get("smoke", 99) < CLEAR_SMOKE and snap.get("co", 99) < CLEAR_CO
-                if clear:
-                    c["clear_since"] = c["clear_since"] or now
-                    if now - c["clear_since"] >= STAND_DOWN_WAIT_S:
-                        await self._stand_down(room, c["level"], "fire out: readings clear 60s")
-                        self._confirmed.pop(room, None)
-                        self._fire_start_time.pop(room, None)
-                else:
-                    c["clear_since"] = None
+            await self._watch_tick(time.time())
+
+    async def _watch_tick(self, now):
+        """One pass of _watch_loop; separated so tests can drive time."""
+        # Doubted rooms
+        for room, w in list(self._watch.items()):
+            if now - w["since"] < STAND_DOWN_WAIT_S:
+                continue
+            snap = self._latest.get(room, {})
+            smoke, co = snap.get("smoke", 99), snap.get("co", 99)
+            clear = smoke < CLEAR_SMOKE and co < CLEAR_CO
+            fire_level = smoke >= TAKEOVER_FIRE_SMOKE and co >= TAKEOVER_FIRE_CO
+            if clear:
+                await self._stand_down(room, w["level"], "LLM false alarm + readings clear 60s")
+                self._watch.pop(room, None)
+            elif fire_level:
+                logger.warning(
+                    f"ESCALATE {w['level']}/{room}: LLM doubted it but readings at fire level "
+                    f"(smoke={smoke}, co={co})"
+                )
+                self._confirmed[room] = {"level": w["level"], "clear_since": None}
+                self._had_fire.add(w["level"])
+                await self._release_floor(w["level"], room, "server escalation")
+                await self._coordinate(room, w["level"], [], reason="escalated after watch")
+                await self._log_override(room, w["level"], "escalated", "escalated: fire-level")
+                self._watch.pop(room, None)
+            else:
+                w["since"] = now  # neither clear nor fire-level: keep watching
+                logger.info(
+                    f"WATCH {w['level']}/{room}: elevated but not fire-level "
+                    f"(smoke={smoke}, co={co}); watching another {STAND_DOWN_WAIT_S}s"
+                )
+        # Confirmed fires that have gone out
+        for room, c in list(self._confirmed.items()):
+            snap = self._latest.get(room, {})
+            clear = snap.get("smoke", 99) < CLEAR_SMOKE and snap.get("co", 99) < CLEAR_CO
+            if clear:
+                c["clear_since"] = c["clear_since"] or now
+                if now - c["clear_since"] >= STAND_DOWN_WAIT_S:
+                    await self._stand_down(room, c["level"], "fire out: readings clear 60s")
+                    self._confirmed.pop(room, None)
+                    self._fire_start_time.pop(room, None)
+            else:
+                c["clear_since"] = None
 
     async def _stand_down(self, room, level, reason):
         others = (set(self._confirmed) | set(self._watch)) - {room}
@@ -425,32 +431,35 @@ class FireAgent:
     async def _heartbeat_loop(self):
         while self._running:
             await asyncio.sleep(5)
-            now = time.time()
-            for lv in self.levels:
-                a = now - self._hb.get((lv, "active"), 0) < HB_TIMEOUT_S
-                s = now - self._hb.get((lv, "standby"), 0) < HB_TIMEOUT_S
-                seen_any = (lv, "active") in self._hb or (lv, "standby") in self._hb
-                grace_over = now - self._start_ts > HB_TIMEOUT_S
-                if not a and not s and not self._takeover[lv] and (seen_any or grace_over):
-                    self._takeover[lv] = True
-                    self._mq.subscribe(f"{self.topic_prefix}/{lv}/#", qos=0)
-                    await self._log_override(
-                        "_controller", lv, "server_takeover", "both floor controllers silent"
-                    )
-                    logger.critical(
-                        f"SERVER TAKEOVER of {lv}: no edge heartbeat for {HB_TIMEOUT_S:.0f}s"
-                    )
-                elif (a or s) and self._takeover[lv]:
-                    self._takeover[lv] = False
-                    self._mq.unsubscribe(f"{self.topic_prefix}/{lv}/#")
-                    with self._lock:
-                        for room in list(self._takeover_readings):
-                            if self.room_levels.get(room) == lv:
-                                self._takeover_readings.pop(room, None)
-                    await self._log_override(
-                        "_controller", lv, "server_handback", "floor controller heartbeat resumed"
-                    )
-                    logger.warning(f"SERVER HANDBACK of {lv}: edge controller is back")
+            await self._heartbeat_tick(time.time())
+
+    async def _heartbeat_tick(self, now):
+        """One pass of _heartbeat_loop; separated so tests can drive time."""
+        for lv in self.levels:
+            a = now - self._hb.get((lv, "active"), 0) < HB_TIMEOUT_S
+            s = now - self._hb.get((lv, "standby"), 0) < HB_TIMEOUT_S
+            seen_any = (lv, "active") in self._hb or (lv, "standby") in self._hb
+            grace_over = now - self._start_ts > HB_TIMEOUT_S
+            if not a and not s and not self._takeover[lv] and (seen_any or grace_over):
+                self._takeover[lv] = True
+                self._mq.subscribe(f"{self.topic_prefix}/{lv}/#", qos=0)
+                await self._log_override(
+                    "_controller", lv, "server_takeover", "both floor controllers silent"
+                )
+                logger.critical(
+                    f"SERVER TAKEOVER of {lv}: no edge heartbeat for {HB_TIMEOUT_S:.0f}s"
+                )
+            elif (a or s) and self._takeover[lv]:
+                self._takeover[lv] = False
+                self._mq.unsubscribe(f"{self.topic_prefix}/{lv}/#")
+                with self._lock:
+                    for room in list(self._takeover_readings):
+                        if self.room_levels.get(room) == lv:
+                            self._takeover_readings.pop(room, None)
+                await self._log_override(
+                    "_controller", lv, "server_handback", "floor controller heartbeat resumed"
+                )
+                logger.warning(f"SERVER HANDBACK of {lv}: edge controller is back")
 
     async def _takeover_loop(self):
         """While covering a floor: threshold rules on raw sensor feed, then normal alert path."""
