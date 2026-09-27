@@ -83,6 +83,8 @@ class EdgeController:
         self.confirmed: dict[str, dict] = {}  # room -> {"smoke":..., "co":..., "ts":...}
         self.doors_released = False
         self._alert_sent = {}  # room -> {severity, smoke, ts}
+        self.own_release = False  # doors released for a fire on THIS floor
+        self.server_release = False  # doors released by server (fire elsewhere)
         self.last_peer_hb = 0.0
         self.pending_cmds: asyncio.Queue = asyncio.Queue()
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -167,9 +169,14 @@ class EdgeController:
         snap["if_ms"] = round((time.perf_counter() - t0) * 1000, 2)
         snap["if_anomaly"] = anomaly
 
-        if anomaly and smoke >= FIRE_SMOKE and co >= FIRE_CO:
+        # Deterministic multi-sensor rule: never vetoed by the learned model.
+        if smoke >= FIRE_SMOKE and co >= FIRE_CO:
             return "fire", snap
+        # Ambiguous band: the IF decides whether it is worth a Tier-2 (LLM) assessment.
         if anomaly and smoke >= POSSIBLE_SMOKE:
+            return "possible", snap
+        # Safety net: very high single-sensor smoke goes to the server even if the IF is quiet.
+        if smoke >= FIRE_SMOKE:
             return "possible", snap
         return "normal", snap
 
@@ -238,6 +245,7 @@ class EdgeController:
             return
         if not self.doors_released:
             await self._set_doors(DOOR_RELEASED)
+        self.own_release = True
         self._publish_alert(
             room,
             {"room": room, "decision": "fire", "severity": escalation, **snap},
@@ -262,8 +270,10 @@ class EdgeController:
                 return
             self.confirmed.pop(room, None)
             self._alert_sent.pop(room, None)
-            if not self.confirmed and self.doors_released and self.is_acting:
-                await self._set_doors(DOOR_LOCKED)
+            if not self.confirmed:
+                self.own_release = False
+                if self.doors_released and self.is_acting and not self.server_release:
+                    await self._set_doors(DOOR_LOCKED)
             self.publish(
                 f"decisions/{self.floor}/{self._safe(room)}",
                 {"room": room, "decision": "stand_down_ack"},
@@ -274,12 +284,16 @@ class EdgeController:
             action = payload.get("action")
             if not self.is_acting:
                 return
-            if action == "release" and not self.doors_released:
-                await self._set_doors(DOOR_RELEASED)
-                log.warning("Cross-floor door release commanded by server")
-            elif action == "lock" and self.doors_released and not self.confirmed:
-                await self._set_doors(DOOR_LOCKED)
-                log.warning("Cross-floor re-lock commanded by server (all clear)")
+            if action == "release":
+                self.server_release = True
+                if not self.doors_released:
+                    await self._set_doors(DOOR_RELEASED)
+                    log.warning("Cross-floor door release commanded by server")
+            elif action == "lock":
+                self.server_release = False
+                if self.doors_released and not self.own_release and not self.confirmed:
+                    await self._set_doors(DOOR_LOCKED)
+                    log.warning("Cross-floor re-lock commanded by server (all clear)")
 
         elif cmd == "evacuation":
             log.info(f"Evacuation route received: {payload.get('route')}")
