@@ -115,6 +115,8 @@ SELECT create_hypertable(
 
 CREATE INDEX IF NOT EXISTS llm_overrides_type_time
     ON {SCHEMA}.llm_overrides (override_type, time DESC);
+
+ALTER TABLE {SCHEMA}.llm_overrides ADD COLUMN IF NOT EXISTS llm_ms DOUBLE PRECISION;
 """
 
 CREATE_CONTINUOUS_AGGREGATES = f"""

@@ -333,6 +333,9 @@ async def main():
             },
         )
 
+        sim.agent = agent
+        sim.bs = bs
+
         print("=" * 60)
         print("Fire Detection System — Full Building")
         print("=" * 60)

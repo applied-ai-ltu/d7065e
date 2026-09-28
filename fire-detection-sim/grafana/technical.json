@@ -261,7 +261,7 @@
     {
       "id": 21,
       "type": "stat",
-      "title": "Edge decisions",
+      "title": "LLM inference (p50 / p95)",
       "gridPos": {
         "x": 16,
         "y": 0,
@@ -282,7 +282,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT NOW() AS time, 'rows' AS metric, COUNT(*)::float AS value FROM fire_detection_sim.edge_decisions WHERE kind = 'decision' AND room NOT LIKE '\\_%' AND $__timeFilter(time)"
+          "rawSql": "SELECT NOW() AS time, 'p50' AS metric, percentile_cont(0.5) WITHIN GROUP (ORDER BY llm_ms)::float AS value FROM fire_detection_sim.llm_overrides WHERE llm_ms IS NOT NULL AND $__timeFilter(time) UNION ALL SELECT NOW(), 'p95', percentile_cont(0.95) WITHIN GROUP (ORDER BY llm_ms)::float FROM fire_detection_sim.llm_overrides WHERE llm_ms IS NOT NULL AND $__timeFilter(time)"
         }
       ],
       "fieldConfig": {
@@ -291,12 +291,22 @@
             "mode": "thresholds"
           },
           "noValue": "none in window",
+          "unit": "ms",
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3000
+              },
+              {
+                "color": "red",
+                "value": 8000
               }
             ]
           }
@@ -315,7 +325,8 @@
         "graphMode": "none",
         "textMode": "value_and_name",
         "justifyMode": "center"
-      }
+      },
+      "description": "generate_json() wall time on the server (LiteLLM -> SGLang); excludes queueing"
     },
     {
       "id": 22,
@@ -383,7 +394,7 @@
       "gridPos": {
         "x": 0,
         "y": 4,
-        "w": 12,
+        "w": 8,
         "h": 8
       },
       "datasource": {
@@ -435,9 +446,9 @@
       "type": "timeseries",
       "title": "Alert \u2192 LLM verdict latency",
       "gridPos": {
-        "x": 12,
+        "x": 8,
         "y": 4,
-        "w": 12,
+        "w": 8,
         "h": 8
       },
       "datasource": {
@@ -487,6 +498,62 @@
     },
     {
       "id": 25,
+      "type": "timeseries",
+      "title": "LLM inference latency",
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "DS_TIMESCALE"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "DS_TIMESCALE"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT time, override_type AS metric, llm_ms::float AS value FROM fire_detection_sim.llm_overrides WHERE llm_ms IS NOT NULL AND $__timeFilter(time) ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "always",
+            "drawStyle": "points",
+            "pointSize": 6
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Per call; compare before/after SGLang changes on identical prompts"
+    },
+    {
+      "id": 26,
       "type": "timeseries",
       "title": "Heartbeats per minute per controller",
       "gridPos": {
@@ -539,7 +606,7 @@
       "description": "Expected 6/min per controller (10 s interval). A gap is an outage."
     },
     {
-      "id": 26,
+      "id": 27,
       "type": "table",
       "title": "Failover / takeover events",
       "gridPos": {
@@ -626,7 +693,7 @@
       }
     },
     {
-      "id": 27,
+      "id": 28,
       "type": "bargauge",
       "title": "Tier-2 verdict on edge alerts",
       "gridPos": {
@@ -677,7 +744,7 @@
       "description": "What Tier 2 made of each Tier-1 alert"
     },
     {
-      "id": 28,
+      "id": 29,
       "type": "bargauge",
       "title": "Tier-1 decision mix by node",
       "gridPos": {
@@ -727,7 +794,7 @@
       }
     },
     {
-      "id": 29,
+      "id": 30,
       "type": "bargauge",
       "title": "Tier-2 verdict mix",
       "gridPos": {
@@ -777,7 +844,7 @@
       }
     },
     {
-      "id": 30,
+      "id": 31,
       "type": "timeseries",
       "title": "Pipeline throughput (rows/min)",
       "gridPos": {
@@ -864,7 +931,7 @@
       }
     },
     {
-      "id": 31,
+      "id": 32,
       "type": "stat",
       "title": "Table sizes (approx. rows)",
       "gridPos": {
@@ -929,7 +996,7 @@
         "w": 24,
         "h": 4
       },
-      "id": 32,
+      "id": 33,
       "options": {
         "content": "### \ud83d\udd17 External Monitoring\n\n| Tool | URL | Purpose |\n|---|---|---|\n| **Phoenix Traces** | [Open Phoenix](https://homelab:30600) | LLM call traces, latency, tokens |\n| **ClearML** | [Open ClearML](https://homelab:30808) | Model training runs, detector versions |\n| **BuildSim 3D** | [Open BuildSim](http://192.168.68.67:30909) | 3D building viewer with room highlights |\n| **Control API** | [Open Swagger](http://192.168.68.67:8089/docs) | Trigger fires, check status |\n",
         "mode": "markdown"

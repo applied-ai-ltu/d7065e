@@ -81,6 +81,9 @@ class FireAgent:
         self._last_alert = {}  # room -> (severity, ts)
         self._cross_floor_released = set()
         self._had_fire = set()  # levels with a confirmed room this incident
+        self._last_llm_ms = None  # inference time of the most recent LLM call
+        # BuildSim visualisation state per confirmed room; pushed as whole lists (replace semantics)
+        self._viz = {"appearance": {}, "effects": {}, "alerts": {}, "coverage": {}}
         self._last_plan = None
 
         # Room -> level, from run(rooms). Fixes cross-floor visualisation payloads.
@@ -290,7 +293,9 @@ class FireAgent:
             self._had_fire.add(level)
             await self._execute(plan, risk_rooms, evac_routes)
             await self._coordinate(room, level, evac_routes, reason=assessment.get("reasoning", ""))
-            await self._log_override(room, level, "confirm", f"conf={conf:.2f}")
+            await self._log_override(
+                room, level, "confirm", f"conf={conf:.2f}", llm_ms=self._last_llm_ms
+            )
             if severity == "server_takeover":
                 await self._set_floor_doors(level, DOOR_RELEASED)
         else:
@@ -302,6 +307,7 @@ class FireAgent:
                     level,
                     "watch_pending",
                     f"LLM is_fire={is_fire} conf={conf:.2f}; waiting {STAND_DOWN_WAIT_S:.0f}s",
+                    llm_ms=self._last_llm_ms,
                 )
                 logger.warning(
                     f"LLM doubts {level}/{room} (is_fire={is_fire}, conf={conf:.2f}); "
@@ -411,6 +417,7 @@ class FireAgent:
             f"commands/{level}/stand-down",
             {"room": room, "reason": reason, "floor_clear": floor_clear, "relock": relock},
         )
+        await self._clear_room_viz(room)
         await self._log_override(room, level, "stand_down", reason)
         logger.warning(f"STAND-DOWN sent for {level}/{room}: {reason} (floor_clear={floor_clear})")
         if self._takeover.get(level) and floor_clear:
@@ -426,6 +433,7 @@ class FireAgent:
             self._cross_floor_released.clear()
             self._had_fire.clear()
             self._active_fire = False
+            await self._clear_all_viz()
 
     # ------------------------------------------------------ heartbeat/takeover
     async def _heartbeat_loop(self):
@@ -540,11 +548,14 @@ Evacuation: {route_str}
 
 Assess whether this is a real fire or a false alarm and provide a response plan."""
 
+        t0 = time.perf_counter()
         try:
             plan = await self.llm.generate_json(prompt, system=FIRE_AGENT_SYSTEM)
-            logger.info("LLM plan received")
+            self._last_llm_ms = round((time.perf_counter() - t0) * 1000, 1)
+            logger.info(f"LLM plan received in {self._last_llm_ms:.0f} ms")
             return plan
         except Exception as e:
+            self._last_llm_ms = None
             logger.error(f"LLM planning failed: {e}")
             return self._fallback_plan(room, level, features, risk_rooms)
 
@@ -620,28 +631,17 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
                 seen.add(a["room"])
                 known.append(a)
         appearances = known
-        try:
-            await self.bs.set_room_appearance(appearances)
-        except Exception as e:
-            body = getattr(getattr(e, "response", None), "text", "")
-            logger.warning(f"Failed to set room appearance: {e} {body[:200]}")
+        self._viz["appearance"][room] = appearances
 
-        try:
-            await self.bs.set_effects(
-                [
-                    {
-                        "id": f"fire-{self._safe(room)}",
-                        "type": "fire",
-                        "label": f"Fire in {room}",
-                        "level": level,
-                        "room": room,
-                        "radius": 3.0,
-                        "intensity": assessment.get("confidence", 0.8),
-                    }
-                ]
-            )
-        except Exception as e:
-            logger.warning(f"Failed to set effects: {e}")
+        self._viz["effects"][room] = {
+            "id": f"fire-{self._safe(room)}",
+            "type": "fire",
+            "label": f"Fire in {room}",
+            "level": level,
+            "room": room,
+            "radius": 3.0,
+            "intensity": assessment.get("confidence", 0.8),
+        }
 
         alerts = plan.get("alerts", [])
         if alerts:
@@ -657,10 +657,7 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
                 }
                 for a in alerts
             ]
-            try:
-                await self.bs.set_alerts(bs_alerts)
-            except Exception as e:
-                logger.warning(f"Failed to set alerts: {e}")
+            self._viz["alerts"][room] = bs_alerts
 
         try:
             coverage = []
@@ -678,10 +675,10 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
                             "color": "#ff880088",
                         }
                     )
-            if coverage:
-                await self.bs.set_coverage(coverage)
+            self._viz["coverage"][room] = coverage
         except Exception as e:
-            logger.warning(f"Failed to set coverage: {e}")
+            logger.warning(f"Failed to compute coverage: {e}")
+        await self._push_viz()
 
         if evac_routes:
             best = evac_routes[0]
@@ -693,6 +690,40 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
         )
         severity = "critical" if assessment.get("confidence", 0) >= 0.7 else "warning"
         await self._log_fire_event(room, level, severity, plan)
+
+    # -------------------------------------------------------- visualisation state
+    async def _push_viz(self):
+        """Replace BuildSim's effect/tint/alert/coverage lists with the current incident state."""
+        v = self._viz
+        appearance, seen = [], set()
+        for items in v["appearance"].values():
+            for a in items:
+                if a["room"] not in seen:
+                    seen.add(a["room"])
+                    appearance.append(a)
+        payloads = [
+            ("set_room_appearance", appearance),
+            ("set_effects", list(v["effects"].values())),
+            ("set_alerts", [a for items in v["alerts"].values() for a in items]),
+            ("set_coverage", [c for items in v["coverage"].values() for c in items]),
+        ]
+        for name, payload in payloads:
+            try:
+                await getattr(self.bs, name)(payload)
+            except Exception as e:
+                logger.warning(f"BuildSim {name} failed: {e}")
+
+    async def _clear_room_viz(self, room):
+        if any(room in self._viz[k] for k in self._viz):
+            for k in self._viz:
+                self._viz[k].pop(room, None)
+            await self._push_viz()
+
+    async def _clear_all_viz(self):
+        for k in self._viz:
+            self._viz[k].clear()
+        await self._push_viz()
+        logger.info("BuildSim visualisation cleared")
 
     # -------------------------------------------------------------- storage
     async def _db(self):
@@ -723,19 +754,20 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
         except Exception as e:
             logger.warning(f"Failed to log fire event: {e}")
 
-    async def _log_override(self, room, level, override_type, reason):
+    async def _log_override(self, room, level, override_type, reason, llm_ms=None):
         if not self.db_config:
             return
         try:
             conn = await self._db()
             await conn.execute(
                 """INSERT INTO fire_detection_sim.llm_overrides
-                   (time, room, level, override_type, reason)
-                   VALUES (NOW(), $1, $2, $3, $4)""",
+                   (time, room, level, override_type, reason, llm_ms)
+                   VALUES (NOW(), $1, $2, $3, $4, $5)""",
                 room,
                 level,
                 override_type,
                 reason,
+                llm_ms,
             )
             await conn.close()
         except Exception as e:

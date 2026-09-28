@@ -654,14 +654,25 @@ def build_technical(v1):
             desc="Edge alert published -> Tier-2 verdict logged (includes LLM inference)",
         ),
         stat(
-            "Edge decisions",
+            "LLM inference (p50 / p95)",
             16,
             0,
             4,
             f"""
-            SELECT NOW() AS time, 'rows' AS metric, COUNT(*)::float AS value
-            FROM {S}.edge_decisions WHERE kind = 'decision' AND {NOT_META} AND $__timeFilter(time)""",
-            thresholds=[{"color": "blue", "value": None}],
+            SELECT NOW() AS time, 'p50' AS metric,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY llm_ms)::float AS value
+            FROM {S}.llm_overrides WHERE llm_ms IS NOT NULL AND $__timeFilter(time)
+            UNION ALL
+            SELECT NOW(), 'p95', percentile_cont(0.95) WITHIN GROUP (ORDER BY llm_ms)::float
+            FROM {S}.llm_overrides WHERE llm_ms IS NOT NULL AND $__timeFilter(time)""",
+            unit="ms",
+            decimals=0,
+            thresholds=[
+                {"color": "green", "value": None},
+                {"color": "orange", "value": 3000},
+                {"color": "red", "value": 8000},
+            ],
+            desc="generate_json() wall time on the server (LiteLLM -> SGLang); excludes queueing",
         ),
         stat(
             "LLM assessments",
@@ -677,7 +688,7 @@ def build_technical(v1):
             "IF inference latency p95 by node (1 min)",
             0,
             4,
-            12,
+            8,
             8,
             [
                 target(f"""
@@ -691,9 +702,9 @@ def build_technical(v1):
         ),
         timeseries(
             "Alert → LLM verdict latency",
-            12,
+            8,
             4,
-            12,
+            8,
             8,
             [
                 target(f"""
@@ -702,6 +713,21 @@ def build_technical(v1):
             ],
             unit="s",
             points=True,
+        ),
+        timeseries(
+            "LLM inference latency",
+            16,
+            4,
+            8,
+            8,
+            [
+                target(f"""
+            SELECT time, override_type AS metric, llm_ms::float AS value
+            FROM {S}.llm_overrides WHERE llm_ms IS NOT NULL AND $__timeFilter(time) ORDER BY time""")
+            ],
+            unit="ms",
+            points=True,
+            desc="Per call; compare before/after SGLang changes on identical prompts",
         ),
         timeseries(
             "Heartbeats per minute per controller",

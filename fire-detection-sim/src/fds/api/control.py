@@ -47,6 +47,8 @@ class SimState:
         self.config = None
         self.secrets = None
         self.start_time = 0
+        self.agent = None
+        self.bs = None
 
 
 sim = SimState()
@@ -350,6 +352,20 @@ async def trigger_false_alarm(req: FireRequest):
         raise HTTPException(status_code=404, detail=f"Room {req.room} not found")
     room.smoke += 15.0
     return {"message": f"False alarm triggered in {req.room}"}
+
+
+@app.post("/viz/clear")
+async def clear_visualisation():
+    """Reset BuildSim effects, tints, alerts and coverage (demo prep / stale state)."""
+    if sim.agent is not None:
+        await sim.agent._clear_all_viz()
+        return {"message": "visualisation cleared (agent state reset)"}
+    if sim.bs is None:
+        raise HTTPException(status_code=503, detail="Simulation not running")
+    bs = sim.bs
+    for call in (bs.set_room_appearance, bs.set_effects, bs.set_alerts, bs.set_coverage):
+        await call([])
+    return {"message": "visualisation cleared"}
 
 
 if __name__ == "__main__":
