@@ -19,6 +19,7 @@ Responsibilities
 import asyncio
 import json
 import logging
+import os
 import threading
 import time
 from collections import defaultdict, deque
@@ -37,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 STAND_DOWN_WAIT_S = 60.0  # de-escalation needs this long of clear readings
 ALERT_COOLDOWN_S = 60  # same room + same severity -> one LLM assessment per minute
+LLM_CONCURRENCY = int(os.environ.get("LLM_CONCURRENCY", "3"))  # parallel Tier-2 assessments
 CLEAR_SMOKE = 2.0
 CLEAR_CO = 5.0
 HB_TIMEOUT_S = 30.0  # a controller is "silent" after this
@@ -200,12 +202,25 @@ class FireAgent:
 
     # ------------------------------------------------------------ alert path
     async def _alert_loop(self):
+        """Assess alerts with bounded concurrency; SGLang batches the parallel calls."""
+        sem = asyncio.Semaphore(LLM_CONCURRENCY)
+        tasks: set[asyncio.Task] = set()
+
+        async def handle(p):
+            async with sem:
+                try:
+                    await self.process_alert(p)
+                except Exception as e:
+                    logger.error(f"Alert processing failed: {e}")
+
         while self._running:
-            p = await self._queue.get()
             try:
-                await self.process_alert(p)
-            except Exception as e:
-                logger.error(f"process_alert failed: {e}", exc_info=True)
+                p = await asyncio.wait_for(self._queue.get(), timeout=1.0)
+            except TimeoutError:
+                continue
+            t = asyncio.create_task(handle(p))
+            tasks.add(t)
+            t.add_done_callback(tasks.discard)
 
     def _features_for(self, room: str, p: dict) -> dict:
         with self._lock:
@@ -552,12 +567,33 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
         try:
             plan = await self.llm.generate_json(prompt, system=FIRE_AGENT_SYSTEM)
             self._last_llm_ms = round((time.perf_counter() - t0) * 1000, 1)
-            logger.info(f"LLM plan received in {self._last_llm_ms:.0f} ms")
-            return plan
+            logger.info(f"LLM verdict received in {self._last_llm_ms:.0f} ms")
+            return self._normalise_plan(plan, room, level, risk_rooms)
         except Exception as e:
             self._last_llm_ms = None
             logger.error(f"LLM planning failed: {e}")
             return self._fallback_plan(room, level, features, risk_rooms)
+
+    @staticmethod
+    def _normalise_plan(raw, room, level, risk_rooms):
+        """LLM returns a verdict; the response plan is derived here, never by the model."""
+        a = raw.get("assessment") or {}
+        is_fire = bool(a.get("is_fire"))
+        conf = float(a.get("confidence", 0) or 0)
+        act = is_fire and conf >= 0.7
+        alert = raw.get("alert") or (raw.get("alerts") or [None])[0]
+        return {
+            "assessment": {
+                "is_fire": is_fire,
+                "confidence": conf,
+                "reasoning": a.get("reasoning", ""),
+            },
+            "affected_room": room,
+            "affected_level": level,
+            "risk_rooms": [r.room for r in risk_rooms[:5]],
+            "plan": {"doors": [{"room": room, "action": "unlock"}] if act else [], "evacuate": act},
+            "alerts": [alert] if alert else [],
+        }
 
     def _fallback_plan(self, room, level, features, risk_rooms):
         smoke = features.get("smoke", 0)
