@@ -47,11 +47,15 @@ spec:
           ports:
             - {containerPort: 8089, name: control}
           env:
-            - name: VAULT_ADDR
-              value: "http://vault.vault.svc.cluster.local:8200"
-            - name: VAULT_TOKEN
+            # Secrets come from this app's own k8s Secret `fds-app` (no Vault token in this
+            # namespace). src/fds/secrets.py falls back to these env vars when VAULT_TOKEN is unset.
+            # Create fds-app from Vault secret/homelab/d7065e (fields litellm_api_key, db_password).
+            - name: LITELLM_API_KEY
               valueFrom:
-                secretKeyRef: {name: fds-vault, key: token}
+                secretKeyRef: {name: fds-app, key: LITELLM_API_KEY}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: fds-app, key: DB_PASSWORD}
             - name: PHOENIX_COLLECTOR_ENDPOINT
               value: "http://192.168.68.67:30317"
           volumeMounts:
