@@ -610,15 +610,22 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
         }
 
     def _fallback_plan(self, room, level, features, risk_rooms):
+        # LLM unreachable: apply the deterministic multi-sensor rule the server escalates
+        # on anyway (and the edge has already acted on), and act on it with confidence.
+        # Scaling confidence by the readings left a textbook fire (smoke 12 / CO 25) at
+        # 0.25, below the 0.7 gate, so the origin room was doubted while the LLM was down.
         smoke = features.get("smoke", 0)
         co = features.get("co", 0)
-        is_fire = smoke > 10 and co > 20
-        confidence = min(1.0, (smoke / 50 + co / 100) / 2)
+        is_fire = smoke >= TAKEOVER_FIRE_SMOKE and co >= TAKEOVER_FIRE_CO
+        confidence = 0.9 if is_fire else 0.2
         return {
             "assessment": {
                 "is_fire": is_fire,
                 "confidence": confidence,
-                "reasoning": "Fallback: rule-based (LLM unavailable)",
+                "reasoning": "Fallback: rule-based (LLM unavailable); "
+                f"smoke={smoke:.1f}>={TAKEOVER_FIRE_SMOKE:g} and co={co:.1f}>={TAKEOVER_FIRE_CO:g}"
+                if is_fire
+                else "Fallback: rule-based (LLM unavailable); multi-sensor rule not met",
             },
             "affected_room": room,
             "affected_level": level,

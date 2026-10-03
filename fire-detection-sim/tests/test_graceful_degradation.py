@@ -30,11 +30,20 @@ async def test_fallback_watches_ambiguous_readings(agent):
     assert published(agent, "/doors") == []
 
 
-async def test_fallback_does_not_overtrust_a_marginal_fire(agent):
-    # smoke 12 / CO 25 passes the rule but the fallback confidence is far below 0.7:
-    # the room is watched and readings decide, exactly like a doubted LLM verdict
+async def test_fallback_trusts_the_multi_sensor_rule_at_the_threshold(agent):
+    # smoke 12 / CO 25 is the edge's confirmed condition; with the LLM down the server
+    # must not second-guess it (scenario 2, 2026-10-03: origin room was doubted while
+    # its neighbours were confirmed, so cross-floor release and viz went to the wrong room)
     break_llm(agent)
     await agent.process_alert(alert("A1", severity="confirmed", decision="fire", smoke=12, co=25))
+    assert "A1" in agent._confirmed and "A1" not in agent._watch
+    assert agent._last_plan["assessment"]["confidence"] >= 0.7
+    assert published(agent, "/doors", action="release")
+
+
+async def test_fallback_rejects_smoke_without_co(agent):
+    break_llm(agent)
+    await agent.process_alert(alert("A1", severity="confirmed", decision="fire", smoke=40, co=3))
     assert "A1" in agent._watch and "A1" not in agent._confirmed
-    assert agent._last_plan["assessment"]["is_fire"] is True
-    assert agent._last_plan["assessment"]["confidence"] < 0.7
+    assert agent._last_plan["assessment"]["is_fire"] is False
+    assert published(agent, "/doors") == []
