@@ -10,10 +10,16 @@ This is the ONLY source of truth. Everything else samples from it.
 
 import logging
 import math
+import os
 import time
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+# Rooms whose centroids are closer than this (graph units, ~metres) share a wall and
+# exchange smoke/heat. 30 keeps A109 -> A108/A110 (24-28) and excludes A109 -> A323 (45,
+# across a courtyard). Rooms joined by a graph edge (door/opening) are neighbours regardless.
+NEIGHBOR_RADIUS = float(os.getenv("NEIGHBOR_RADIUS", "30"))
 
 
 @dataclass

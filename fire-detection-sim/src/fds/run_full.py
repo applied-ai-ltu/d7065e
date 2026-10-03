@@ -30,7 +30,7 @@ from fds.buildsim.client import BuildSimClient
 from fds.config import Config
 from fds.models.evacuation import EvacuationPlanner
 from fds.models.spread import FireSpreadPredictor
-from fds.physics.engine import PhysicsEngine
+from fds.physics.engine import NEIGHBOR_RADIUS, PhysicsEngine
 from fds.physics.occupancy import OccupancySimulator
 from fds.physics.sensor_gateway import SensorConfig, SensorGateway
 from fds.pipeline.consumer import PipelineConsumer
@@ -123,14 +123,23 @@ async def main():
 
             combined_graph["edges"].extend(graph.get("edges", []))
 
-            # Set neighbors based on spatial proximity (same floor)
+            # Neighbours for smoke/heat spread: rooms joined by a graph edge (door/opening)
+            # plus rooms within NEIGHBOR_RADIUS (shared wall). A plain 50-unit radius reached
+            # across courtyards (A109 -> A323 at 45 units).
+            id_to_name = {n["id"]: n["name"] for n in graph["nodes"]}
+            connected: dict[str, set[str]] = {}
+            for edge in graph.get("edges", []):
+                a, b = id_to_name.get(edge.get("from")), id_to_name.get(edge.get("to"))
+                if a and b and a != b:
+                    connected.setdefault(a, set()).add(b)
+                    connected.setdefault(b, set()).add(a)
             for name, pos in node_positions.items():
                 neighbors = []
                 for other_name, other_pos in node_positions.items():
                     if other_name == name:
                         continue
-                    dist = math.sqrt((pos[0] - other_pos[0]) ** 2 + (pos[1] - other_pos[1]) ** 2)
-                    if dist < 50:
+                    dist = math.dist(pos, other_pos)
+                    if dist < NEIGHBOR_RADIUS or other_name in connected.get(name, ()):
                         neighbors.append((other_name, dist))
                 engine.set_neighbors(name, neighbors)
 

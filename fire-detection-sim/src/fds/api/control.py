@@ -20,7 +20,7 @@ from fds.models.detector import FireDetector
 from fds.models.evacuation import EvacuationPlanner
 from fds.models.spread import FireSpreadPredictor
 from fds.physics.actuator_process import ActuatorConfig, ActuatorProcess
-from fds.physics.engine import PhysicsEngine
+from fds.physics.engine import NEIGHBOR_RADIUS, PhysicsEngine
 from fds.physics.occupancy import OccupancySimulator
 from fds.physics.sensor_gateway import SensorConfig, SensorGateway
 from fds.pipeline.consumer import PipelineConsumer
@@ -109,7 +109,7 @@ async def start_simulation():
             if other_name == name:
                 continue
             dist = math.sqrt((pos[0] - other_pos[0]) ** 2 + (pos[1] - other_pos[1]) ** 2)
-            if dist < 50:
+            if dist < NEIGHBOR_RADIUS:
                 neighbors.append((other_name, dist))
         engine.set_neighbors(name, neighbors)
 
