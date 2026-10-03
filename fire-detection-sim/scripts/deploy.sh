@@ -4,6 +4,7 @@
 #   scripts/deploy.sh            # everything
 #   scripts/deploy.sh edge       # edge image + edge deployments only
 #   scripts/deploy.sh server     # server image + server deployment only
+#   scripts/deploy.sh check      # pre-flight: images on nodes, secret, pods (no changes)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -30,6 +31,39 @@ ship_edge() {  # $1 = platform, $2 = host
   ssh "$host" 'sudo k3s ctr images import /tmp/fds-edge.tar && rm /tmp/fds-edge.tar'
 }
 
+require_app_secret() {  # fds-server reads LITELLM_API_KEY / DB_PASSWORD from Secret fds-app
+  kubectl -n $NS get secret fds-app >/dev/null 2>&1 && return
+  echo "Secret fds-app is missing. Create it from Vault secret/homelab/d7065e, then re-run:"
+  echo "  kubectl -n $NS create secret generic fds-app \\"
+  echo "    --from-literal=LITELLM_API_KEY=\"\$(vault kv get -field=litellm_api_key secret/homelab/d7065e)\" \\"
+  echo "    --from-literal=DB_PASSWORD=\"\$(vault kv get -field=db_password secret/homelab/d7065e)\""
+  exit 1
+}
+
+if [[ $WHAT == check ]]; then
+  ok=0
+  for h in "$PI" "$STANDBY"; do
+    if ssh -o ConnectTimeout=5 "$h" 'sudo k3s ctr images ls -q' 2>/dev/null | grep -q '^docker.io/library/fds-edge:latest$'; then
+      echo "ok       fds-edge image on $h"
+    else
+      echo "MISSING  fds-edge image on $h  -> scripts/deploy.sh edge"; ok=1
+    fi
+  done
+  if sudo k3s ctr images ls -q | grep -q '^docker.io/library/fds-server:latest$'; then
+    echo "ok       fds-server image on $(hostname)"
+  else
+    echo "MISSING  fds-server image on $(hostname)  -> scripts/deploy.sh server"; ok=1
+  fi
+  if kubectl -n $NS get secret fds-app >/dev/null 2>&1; then
+    echo "ok       secret fds-app"
+  else
+    echo "MISSING  secret fds-app (see require_app_secret in this script)"; ok=1
+  fi
+  kubectl -n $NS get secret fds-vault >/dev/null 2>&1 && { echo "WARNING  legacy secret fds-vault still exists; delete it"; ok=1; }
+  echo "-- pods"; kubectl -n $NS get pods -o wide
+  exit $ok
+fi
+
 if [[ $WHAT == all || $WHAT == edge ]]; then
   test -f edge/detector.onnx || { echo "edge/detector.onnx missing — run python -m fds.models.retrain"; exit 1; }
   ensure_builder
@@ -44,8 +78,7 @@ if [[ $WHAT == all || $WHAT == server ]]; then
   echo "== server image (amd64, local)"
   $DOCKER build -f Dockerfile.server -t fds-server:latest .
   $DOCKER save fds-server:latest | sudo k3s ctr images import -
-  kubectl -n $NS get secret fds-vault >/dev/null 2>&1 || \
-    kubectl -n $NS create secret generic fds-vault --from-literal=token="$(tr -d '\n' < "$HOME/.vault-token")"
+  require_app_secret
   kubectl apply -f k8s/server.yaml
   kubectl -n $NS rollout restart deploy fds-server
 fi

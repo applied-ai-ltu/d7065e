@@ -22,6 +22,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 import threading
 import time
 from collections import defaultdict, deque
@@ -441,17 +442,32 @@ class EdgeController:
             f"Edge controller {self.floor}/{self.role} on {self.node} "
             f"(acting={self.is_acting}, broker={MQTT_BROKER}:{MQTT_PORT})"
         )
+        loops = asyncio.gather(
+            self.tick_loop(),
+            self.heartbeat_loop(),
+            self.peer_watch_loop(),
+            self.command_loop(),
+        )
+        stopping = False
+
+        def _request_stop(sig):
+            nonlocal stopping
+            stopping = True
+            log.info(f"{sig.name} received; shutting down")
+            loops.cancel()
+
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            self.loop.add_signal_handler(sig, _request_stop, sig)
         try:
-            await asyncio.gather(
-                self.tick_loop(),
-                self.heartbeat_loop(),
-                self.peer_watch_loop(),
-                self.command_loop(),
-            )
+            await loops
+        except asyncio.CancelledError:
+            if not stopping:  # cancelled by our caller, not by a signal
+                raise
         finally:
             self.mq.loop_stop()
             self.mq.disconnect()
             await self.http.aclose()
+            log.info(f"Edge controller {self.floor}/{self.role} stopped")
 
 
 def main():
