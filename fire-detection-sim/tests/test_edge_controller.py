@@ -293,3 +293,13 @@ async def test_tick_publishes_clear_when_room_drops_below_threshold(edge, fast_s
         assert decisions[-1]["decision"] == "clear"
     finally:
         task.cancel()
+
+
+def test_snapshot_flags_sensors_frozen_for_stale_s(edge):
+    for v in (5.0, 5.09, 5.09):
+        for k in ("smoke", "co", "temperature"):
+            edge.readings["A1"][k].append(v)
+    edge._last_change[("A1", "smoke")] = time.time()
+    edge._last_change[("A1", "co")] = time.time() - ec.STALE_S - 1
+    _, snap = edge._decide("A1", edge.readings["A1"])
+    assert snap["stale"] == ["co"]

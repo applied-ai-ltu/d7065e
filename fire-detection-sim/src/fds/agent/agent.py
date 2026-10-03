@@ -374,6 +374,20 @@ class FireAgent:
             await asyncio.sleep(5)
             await self._watch_tick(time.time())
 
+    @staticmethod
+    def _readings_clear(snap: dict) -> bool:
+        """Below the stand-down thresholds, judged on live sensors only.
+
+        The edge lists sensors whose value has been frozen for STALE_S in snap["stale"];
+        a stuck CO sensor at 5.09 must not hold three floors of doors open. A room whose
+        smoke AND CO are both stale is never declared clear from its readings alone."""
+        stale = set(snap.get("stale") or [])
+        if {"smoke", "co"} <= stale:
+            return False
+        ok_smoke = "smoke" in stale or snap.get("smoke", 99) < CLEAR_SMOKE
+        ok_co = "co" in stale or snap.get("co", 99) < CLEAR_CO
+        return ok_smoke and ok_co
+
     async def _watch_tick(self, now):
         """One pass of _watch_loop; separated so tests can drive time."""
         # Doubted rooms
@@ -382,7 +396,7 @@ class FireAgent:
                 continue
             snap = self._latest.get(room, {})
             smoke, co = snap.get("smoke", 99), snap.get("co", 99)
-            clear = smoke < CLEAR_SMOKE and co < CLEAR_CO
+            clear = self._readings_clear(snap)
             fire_level = smoke >= TAKEOVER_FIRE_SMOKE and co >= TAKEOVER_FIRE_CO
             if clear:
                 await self._stand_down(room, w["level"], "LLM false alarm + readings clear 60s")
@@ -407,7 +421,7 @@ class FireAgent:
         # Confirmed fires that have gone out
         for room, c in list(self._confirmed.items()):
             snap = self._latest.get(room, {})
-            clear = snap.get("smoke", 99) < CLEAR_SMOKE and snap.get("co", 99) < CLEAR_CO
+            clear = self._readings_clear(snap)
             if clear:
                 c["clear_since"] = c["clear_since"] or now
                 if now - c["clear_since"] >= STAND_DOWN_WAIT_S:

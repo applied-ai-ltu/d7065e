@@ -152,3 +152,12 @@ async def test_coordinate_actuates_doors_directly_for_floor_under_takeover(agent
     assert acted == ["level2-D1-door", "level2-D2-door"]
     assert published(agent, "commands/level2/doors") == []
     assert published(agent, "commands/level1/doors", action="release")
+
+
+def test_stand_down_ignores_a_stuck_sensor_but_not_two(agent):
+    clear = agent._readings_clear
+    assert clear({"smoke": 0.3, "co": 1.0}) is True
+    assert clear({"smoke": 0.3, "co": 5.09}) is False  # live CO just over threshold
+    assert clear({"smoke": 0.3, "co": 5.09, "stale": ["co"]}) is True  # frozen CO ignored
+    assert clear({"smoke": 15.0, "co": 5.09, "stale": ["co"]}) is False  # smoke still live
+    assert clear({"smoke": 0.0, "co": 0.0, "stale": ["smoke", "co"]}) is False  # both dead

@@ -61,6 +61,7 @@ FIRE_CO = float(os.getenv("FIRE_CO", "20"))
 POSSIBLE_SMOKE = float(os.getenv("POSSIBLE_SMOKE", "5"))
 REALERT_FACTOR = float(os.getenv("REALERT_FACTOR", "1.5"))  # re-alert if smoke grows by this
 ALERT_REPEAT_S = float(os.environ.get("ALERT_REPEAT_S", "60"))  # heartbeat re-alert
+STALE_S = float(os.environ.get("STALE_S", "60"))  # unchanged value this long = stuck sensor
 
 DOOR_RELEASED = os.getenv("DOOR_RELEASED", "closed_unlocked")
 DOOR_LOCKED = os.getenv("DOOR_LOCKED", "closed_locked")
@@ -84,6 +85,7 @@ class EdgeController:
         self.confirmed: dict[str, dict] = {}  # room -> {"smoke":..., "co":..., "ts":...}
         self.doors_released = False
         self._alert_sent = {}  # room -> {severity, smoke, ts}
+        self._last_change: dict[tuple[str, str], float] = {}  # (room, sensor) -> ts
         self.own_release = False  # doors released for a fire on THIS floor
         self.server_release = False  # doors released by server (fire elsewhere)
         self.last_peer_hb = 0.0
@@ -121,7 +123,10 @@ class EdgeController:
             if room is None or stype is None or val is None:
                 return
             with self.lock:
-                self.readings[room][stype].append(float(val))
+                hist = self.readings[room][stype]
+                if not hist or float(val) != hist[-1]:
+                    self._last_change[(room, stype)] = time.time()
+                hist.append(float(val))
 
         elif topic.startswith(f"heartbeat/{self.floor}/"):
             self.last_peer_hb = time.time()
@@ -157,10 +162,20 @@ class EdgeController:
         out = self.session.run(None, {self.input_name: feats})
         return int(np.asarray(out[0]).ravel()[0]) == -1
 
+    def _stale(self, room: str) -> list[str]:
+        """Sensors whose value has not changed for STALE_S: the gateway's readings carry
+        noise, so a flat line is a stuck sensor. The server ignores these for stand-down."""
+        now = time.time()
+        return [
+            k
+            for k in ("smoke", "co", "temperature")
+            if self.readings[room].get(k) and now - self._last_change.get((room, k), now) > STALE_S
+        ]
+
     def _decide(self, room: str, hist: dict[str, deque]) -> tuple[str, dict]:
         """Returns (decision, snapshot). decision in {fire, possible, normal}."""
         smoke, co, temp = hist["smoke"][-1], hist["co"][-1], hist["temperature"][-1]
-        snap = {"smoke": smoke, "co": co, "temperature": temp}
+        snap = {"smoke": smoke, "co": co, "temperature": temp, "stale": self._stale(room)}
 
         feats = self._features(hist)
         if feats is None:
@@ -350,6 +365,7 @@ class EdgeController:
                         "smoke": last("smoke"),
                         "co": last("co"),
                         "temperature": last("temperature"),
+                        "stale": self._stale(room),
                     },
                     qos=1,
                 )
