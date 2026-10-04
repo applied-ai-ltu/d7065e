@@ -128,7 +128,7 @@ async def test_failover_report_is_logged_not_assessed(agent):
 
 
 async def test_server_takes_over_silent_floor_and_hands_back(agent):
-    agent._start_ts = time.time() - agent_mod.HB_TIMEOUT_S - 1
+    agent._start_ts = time.time() - agent_mod.BOOT_GRACE_S - 1
     now = time.time()
     agent._hb[("level0", "active")] = now
     agent._hb[("level1", "standby")] = now  # level2: nobody

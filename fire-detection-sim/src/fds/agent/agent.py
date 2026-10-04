@@ -42,6 +42,9 @@ LLM_CONCURRENCY = int(os.environ.get("LLM_CONCURRENCY", "3"))  # parallel Tier-2
 CLEAR_SMOKE = 2.0
 CLEAR_CO = 5.0
 HB_TIMEOUT_S = 30.0  # a controller is "silent" after this
+# After its own start the server waits this long before it declares a floor silent, so a
+# cold start (edges pulling images on the Pi) does not begin with a takeover of every floor.
+BOOT_GRACE_S = float(os.getenv("BOOT_GRACE_S", "90"))
 TAKEOVER_FIRE_SMOKE = 10.0  # server-side threshold rules while covering a floor
 TAKEOVER_FIRE_CO = 20.0
 DOOR_RELEASED = "closed_unlocked"
@@ -477,7 +480,7 @@ class FireAgent:
             a = now - self._hb.get((lv, "active"), 0) < HB_TIMEOUT_S
             s = now - self._hb.get((lv, "standby"), 0) < HB_TIMEOUT_S
             seen_any = (lv, "active") in self._hb or (lv, "standby") in self._hb
-            grace_over = now - self._start_ts > HB_TIMEOUT_S
+            grace_over = now - self._start_ts > BOOT_GRACE_S
             if not a and not s and not self._takeover[lv] and (seen_any or grace_over):
                 self._takeover[lv] = True
                 self._mq.subscribe(f"{self.topic_prefix}/{lv}/#", qos=0)
