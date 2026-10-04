@@ -188,6 +188,11 @@ class EdgeController:
         # Deterministic multi-sensor rule: never vetoed by the learned model.
         if smoke >= FIRE_SMOKE and co >= FIRE_CO:
             return "fire", snap
+        # A CO sensor frozen for STALE_S cannot corroborate anything; strong smoke alone
+        # confirms. Releasing doors is the fail-safe direction (2026-10-04: A109's CO stuck
+        # at 0.00 left the fire room at 'possible' while its neighbours confirmed).
+        if "co" in snap["stale"] and smoke >= 2 * FIRE_SMOKE:
+            return "fire", snap
         # Ambiguous band: the IF decides whether it is worth a Tier-2 (LLM) assessment.
         if anomaly and smoke >= POSSIBLE_SMOKE:
             return "possible", snap

@@ -303,3 +303,13 @@ def test_snapshot_flags_sensors_frozen_for_stale_s(edge):
     edge._last_change[("A1", "co")] = time.time() - ec.STALE_S - 1
     _, snap = edge._decide("A1", edge.readings["A1"])
     assert snap["stale"] == ["co"]
+
+
+def test_strong_smoke_confirms_when_co_sensor_is_stale(edge):
+    FakeSession.anomaly = True
+    h = hist(25, 0.0, 15)
+    assert edge._decide("A1", h)[0] == "possible"  # CO reads 0 and is trusted
+    edge.readings["A1"]["co"].append(0.0)
+    edge._last_change[("A1", "co")] = time.time() - ec.STALE_S - 1
+    assert edge._decide("A1", h)[0] == "fire"  # CO known faulty, smoke 25 confirms
+    assert edge._decide("A1", hist(12, 0.0, 15))[0] == "possible"  # smoke 12 is not enough

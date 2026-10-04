@@ -19,6 +19,7 @@ Rules:
 - confidence >= 0.7 means you are confident it is a real fire; the system escalates on that.
 - Be conservative: missing a fire is worse than a false positive, but do not call fire on smoke alone.
 - Sprinklers are mechanical (68C glass bulb); there is nothing to command.
+- A sensor listed as faulty (frozen) carries no information. If the CO sensor is faulty, the absence of a CO rise is NOT evidence against fire: judge on smoke and temperature, and treat smoke >= 20 with a faulty CO sensor as a fire.
 """
 
 VERIFICATION_SYSTEM = """You are a safety verification agent. Given a response plan and the current building state, verify that:

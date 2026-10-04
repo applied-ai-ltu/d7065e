@@ -47,3 +47,12 @@ async def test_fallback_rejects_smoke_without_co(agent):
     assert "A1" in agent._watch and "A1" not in agent._confirmed
     assert agent._last_plan["assessment"]["is_fire"] is False
     assert published(agent, "/doors") == []
+
+
+async def test_fallback_confirms_strong_smoke_with_a_faulty_co_sensor(agent):
+    break_llm(agent)
+    a = alert("A1", severity="confirmed", decision="fire", smoke=25, co=0.0)
+    a["stale"] = ["co"]
+    await agent.process_alert(a)
+    assert "A1" in agent._confirmed
+    assert published(agent, "/doors", action="release")

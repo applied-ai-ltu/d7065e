@@ -233,6 +233,7 @@ class FireAgent:
             "smoke_rate": float(p.get("smoke", 0)) - float(first.get("smoke", 0)),
             "co_rate": float(p.get("co", 0)) - float(first.get("co", 0)),
             "temp_rate": float(p.get("temperature", 0)) - float(first.get("temperature", 0)),
+            "stale": list(p.get("stale") or []),
         }
 
     async def process_alert(self, p: dict):
@@ -564,6 +565,7 @@ class FireAgent:
                 f"It has ALREADY released this floor's fire doors if it confirmed a fire."
             )
 
+        stale_str = ", ".join(features.get("stale") or []) or "none"
         prompt = f"""Current sensor readings for room {room} on {level}:
 - Smoke: {features.get("smoke", 0):.1f} %obs/m
 - CO: {features.get("co", 0):.1f} ppm
@@ -571,6 +573,7 @@ class FireAgent:
 - Smoke rate of change: {features.get("smoke_rate", 0):.2f}
 - CO rate of change: {features.get("co_rate", 0):.2f}
 - Temperature rate of change: {features.get("temp_rate", 0):.2f}
+- Faulty sensors (value frozen >= 60 s, do not trust): {stale_str}
 {edge_str}
 Rooms at risk from fire spread: {risk_str}
 Evacuation: {route_str}
@@ -616,7 +619,10 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
         # 0.25, below the 0.7 gate, so the origin room was doubted while the LLM was down.
         smoke = features.get("smoke", 0)
         co = features.get("co", 0)
-        is_fire = smoke >= TAKEOVER_FIRE_SMOKE and co >= TAKEOVER_FIRE_CO
+        stale = features.get("stale") or []
+        is_fire = (smoke >= TAKEOVER_FIRE_SMOKE and co >= TAKEOVER_FIRE_CO) or (
+            "co" in stale and smoke >= 2 * TAKEOVER_FIRE_SMOKE
+        )
         confidence = 0.9 if is_fire else 0.2
         return {
             "assessment": {
