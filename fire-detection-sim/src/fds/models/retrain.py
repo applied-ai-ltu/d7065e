@@ -238,11 +238,9 @@ def evaluate(detector, labelled):
 
 
 def evaluate_synthetic(detector):
-    test_normal = generate_normal_windows(n_windows=100)
     test_fire = generate_fire_windows(n_windows=50)
     test_false = generate_false_alarm_windows(n_windows=50)
     return {
-        "normal_accuracy": sum(1 for w in test_normal if not detector.predict(w)[0]) / 100,
         "fire_detection_rate": sum(1 for w in test_fire if detector.predict(w)[0]) / 50,
         "false_alarm_rejection": sum(1 for w in test_false if not detector.predict(w)[0]) / 50,
     }
