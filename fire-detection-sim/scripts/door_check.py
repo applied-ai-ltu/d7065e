@@ -1,7 +1,7 @@
 """Door states straight from BuildSim, per floor: the ground truth behind the viewer.
 
-    python scripts/door_check.py            # all floors
-    python scripts/door_check.py level2     # one floor, every door listed
+python scripts/door_check.py            # all floors
+python scripts/door_check.py level2     # one floor, every door listed
 """
 
 import asyncio
