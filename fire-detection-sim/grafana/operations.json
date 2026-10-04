@@ -706,16 +706,8 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
+            "mode": "fixed",
+            "fixedColor": "green"
           },
           "mappings": [
             {

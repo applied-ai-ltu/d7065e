@@ -487,8 +487,9 @@ def build_operations(v1):
                 "legend": {"displayMode": "list", "placement": "bottom", "showLegend": True},
             },
             defaults={
-                "color": {"mode": "thresholds"},
-                "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}]},
+                # NOT "thresholds": in a state timeline that scheme turns threshold bands into
+                # the states themselves (labelled "-inf..+inf") and ignores value mappings.
+                "color": {"mode": "fixed", "fixedColor": "green"},
                 # range mappings: numeric, so they match however the datasource types the value
                 "mappings": [
                     {
