@@ -489,17 +489,25 @@ def build_operations(v1):
             defaults={
                 "color": {"mode": "thresholds"},
                 "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}]},
+                # range mappings: numeric, so they match however the datasource types the value
                 "mappings": [
                     {
-                        "type": "value",
+                        "type": "range",
                         "options": {
-                            "1": {"text": "stood down", "color": "green", "index": 0},
-                            "2": {"text": "watching", "color": "orange", "index": 1},
-                            "3": {"text": "stand-down refused", "color": "purple", "index": 2},
-                            "4": {"text": "confirmed", "color": "red", "index": 3},
-                            "5": {"text": "escalated", "color": "dark-red", "index": 4},
+                            "from": v - 0.5,
+                            "to": v + 0.5,
+                            "result": {"text": t, "color": c, "index": i},
                         },
                     }
+                    for i, (v, t, c) in enumerate(
+                        [
+                            (1, "stood down", "green"),
+                            (2, "watching", "orange"),
+                            (3, "stand-down refused", "purple"),
+                            (4, "confirmed", "red"),
+                            (5, "escalated", "dark-red"),
+                        ]
+                    )
                 ],
                 "custom": {"fillOpacity": 80, "lineWidth": 0},
             },

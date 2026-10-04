@@ -85,6 +85,7 @@ class EdgeController:
         self.confirmed: dict[str, dict] = {}  # room -> {"smoke":..., "co":..., "ts":...}
         self.doors_released = False
         self._alert_sent = {}  # room -> {severity, smoke, ts}
+        self._door_state: str | None = None  # last state THIS process wrote
         self._last_change: dict[tuple[str, str], float] = {}  # (room, sensor) -> ts
         self.own_release = False  # doors released for a fire on THIS floor
         self.server_release = False  # doors released by server (fire elsewhere)
@@ -228,6 +229,9 @@ class EdgeController:
 
     async def _set_doors(self, state: str):
         """Release (or re-lock) every fire door on THIS floor."""
+        if state == self._door_state:
+            log.info(f"DOORS {state}: already set by this controller on {self.floor}; skipping")
+            return
         if self.door_ids:
             ids = list(self.door_ids)
         else:
@@ -247,6 +251,7 @@ class EdgeController:
         ok = sum(1 for x in results if x)
         log.warning(f"DOORS {state}: {ok}/{len(ids)} on {self.floor}")
         self.doors_released = state == DOOR_RELEASED
+        self._door_state = state
         # Door state for the operations dashboard (no smoke key, so the server ignores it)
         door_state = "doors_released" if self.doors_released else "doors_locked"
         self.publish(

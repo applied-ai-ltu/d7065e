@@ -313,3 +313,13 @@ def test_strong_smoke_confirms_when_co_sensor_is_stale(edge):
     edge._last_change[("A1", "co")] = time.time() - ec.STALE_S - 1
     assert edge._decide("A1", h)[0] == "fire"  # CO known faulty, smoke 25 confirms
     assert edge._decide("A1", hist(12, 0.0, 15))[0] == "possible"  # smoke 12 is not enough
+
+
+async def test_door_state_is_not_rewritten_by_this_controller(edge):
+    await edge._act_on_fire("A1", {"smoke": 12, "co": 25}, "confirmed")  # own release
+    edge.confirmed = {"A1": {}}
+    await edge._handle_command("stand-down", {"room": "A1", "floor_clear": True})  # re-lock
+    n = len(edge.http.puts)
+    assert door_states(edge)[-1] == ec.DOOR_LOCKED
+    await edge._handle_command("doors", {"action": "lock"})  # ALL CLEAR repeats the lock
+    assert len(edge.http.puts) == n  # skipped: this controller already wrote closed_locked

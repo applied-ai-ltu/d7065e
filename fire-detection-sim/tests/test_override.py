@@ -161,3 +161,16 @@ def test_stand_down_ignores_a_stuck_sensor_but_not_two(agent):
     assert clear({"smoke": 0.3, "co": 5.09, "stale": ["co"]}) is True  # frozen CO ignored
     assert clear({"smoke": 15.0, "co": 5.09, "stale": ["co"]}) is False  # smoke still live
     assert clear({"smoke": 0.0, "co": 0.0, "stale": ["smoke", "co"]}) is False  # both dead
+
+
+async def test_viewer_cards_follow_the_verdict(agent):
+    set_llm(agent, False, 0.2)
+    await agent.process_alert(alert("A1"))
+    card = agent._viz["alerts"]["A1"][0]
+    assert card["severity"] == "warning" and "observation" in card["title"]
+    await agent._stand_down("A1", "level0", "test")
+    assert "A1" not in agent._viz["alerts"]
+
+    set_llm(agent, True, 0.9)
+    await agent.process_alert(alert("A2", **FIRE))
+    assert agent._viz["alerts"]["A2"][0]["severity"] == "critical"

@@ -321,6 +321,15 @@ class FireAgent:
             # DOUBT: never undo the edge on one LLM call. Watch, then decide on readings.
             if room not in self._confirmed:
                 self._watch[room] = {"level": level, "since": time.time()}
+                await self._set_card(
+                    room,
+                    level,
+                    "warning",
+                    f"{room}: under observation",
+                    f"Tier 1 flagged smoke={features.get('smoke', 0):.1f}, "
+                    f"CO={features.get('co', 0):.1f}; Tier 2 verdict is_fire={is_fire} "
+                    f"conf={conf:.2f}. Watching {STAND_DOWN_WAIT_S:.0f} s before stand-down.",
+                )
                 await self._log_override(
                     room,
                     level,
@@ -411,6 +420,14 @@ class FireAgent:
                     f"(smoke={smoke}, co={co})"
                 )
                 self._confirmed[room] = {"level": w["level"], "clear_since": None}
+                await self._set_card(
+                    room,
+                    w["level"],
+                    "critical",
+                    f"Fire confirmed in {room}",
+                    f"Readings reached fire level (smoke={smoke}, CO={co}) while under "
+                    "observation; Tier 2 escalated on the deterministic rule.",
+                )
                 self._had_fire.add(w["level"])
                 await self._release_floor(w["level"], room, "server escalation")
                 await self._coordinate(room, w["level"], [], reason="escalated after watch")
@@ -714,7 +731,7 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
             bs_alerts = [
                 {
                     "id": f"alert-{self._safe(room)}-{int(time.time())}",
-                    "severity": a.get("severity", "warning"),
+                    "severity": "critical",  # _execute runs only on confirm
                     "title": a.get("title", "Fire alert"),
                     "message": a.get("message", ""),
                     "level": level,
@@ -778,6 +795,21 @@ Assess whether this is a real fire or a false alarm and provide a response plan.
                 await getattr(self.bs, name)(payload)
             except Exception as e:
                 logger.warning(f"BuildSim {name} failed: {e}")
+
+    async def _set_card(self, room, level, severity, title, message):
+        """One alert card for a room in the BuildSim viewer (replaces any earlier card)."""
+        self._viz["alerts"][room] = [
+            {
+                "id": f"card-{self._safe(room)}-{int(time.time())}",
+                "severity": severity,
+                "title": title,
+                "message": message,
+                "level": level,
+                "room": room,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        ]
+        await self._push_viz()
 
     async def _clear_room_viz(self, room):
         if any(room in self._viz[k] for k in self._viz):

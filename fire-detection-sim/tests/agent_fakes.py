@@ -99,7 +99,7 @@ def set_llm(agent, is_fire, confidence):
             "affected_room": room,
             "affected_level": level,
             "plan": {"doors": [{"room": room, "action": "unlock"}], "evacuate": is_fire},
-            "alerts": [],
+            "alert": {"severity": "warning", "title": f"Fire in {room}", "message": "test"},
         }
 
     agent.llm.generate_json = generate_json
