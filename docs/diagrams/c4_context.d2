@@ -8,55 +8,28 @@ title: {
   style.bold: true
 }
 
-# External actors
-building_manager: {
-  label: "Building Manager\n[Person]\nMonitors dashboards,\ntriggers test fires"
-  shape: person
-  style.fill: "#08427b"
-  style.font-color: "#ffffff"
+classes: {
+  person: {shape: person; style: {fill: "#08427b"; font-size: 13}}
+  system: {style: {fill: "#1168bd"; font-color: "#ffffff"; border-radius: 8; font-size: 14; bold: true}}
+  ext: {style: {fill: "#999999"; font-color: "#ffffff"; border-radius: 8; font-size: 13}}
+  rel: {style: {font-size: 12}}
 }
 
-building_occupants: {
-  label: "Building Occupants\n[Person]\nPresence is sensed"
-  shape: person
-  style.fill: "#08427b"
-  style.font-color: "#ffffff"
-}
+operator: "Building operator [Person]\nwatches viewer and dashboards,\ntriggers test fires and false alarms" {class: person}
+occupants: "Building occupants [Person]\npresence drives the occupancy model;\nevacuation routes are computed for them" {class: person}
 
-# The system
-fire_system: {
-  label: "Fire Detection &\nAutonomous Response\n[Software System]\nDetects fires, plans response,\ncommands actuators"
-  style.fill: "#1168bd"
-  style.font-color: "#ffffff"
-  style.border-radius: 8
-}
+fire_system: "Fire Detection & Autonomous Response\n[Software System]\nTier 1: edge controllers per floor (Raspberry Pi) detect and release doors locally.\nTier 2: server agent confirms with an LLM, coordinates floors, stands the building down." {class: system}
 
-# External systems
-buildsim: {
-  label: "BuildSim\n[Software System]\nBuilding environment:\nsensor values, actuator state,\n3D viewer"
-  style.fill: "#999999"
-  style.font-color: "#ffffff"
-  style.border-radius: 8
-}
+buildsim: "BuildSim\n[Software System]\nBuilding model of LTU A-huset: 950 rooms,\n124 fire doors, sprinklers, 3D viewer" {class: ext}
+llm: "LLM inference service\n[Software System]\nLiteLLM → SGLang, Qwen2.5-14B,\nself-hosted on the cluster GPU" {class: ext}
+observability: "Observability\n[Software Systems]\nGrafana dashboards, Phoenix LLM traces,\nClearML training runs, TimescaleDB" {class: ext}
+other_systems: "Other building systems\n[Software Systems]\nVentilation, security, energy management\n(not integrated; share BuildSim)" {class: ext}
 
-external_compute: {
-  label: "External Compute\n[Infrastructure]\nRaspberry Pi (edge inference),\nJetson (embeddings)"
-  style.fill: "#999999"
-  style.font-color: "#ffffff"
-  style.border-radius: 8
-}
-
-other_systems: {
-  label: "Other Building Systems\ne.g. Ventilation, Security,\nEnergy Management\n[Software Systems]"
-  style.fill: "#999999"
-  style.font-color: "#ffffff"
-  style.border-radius: 8
-}
-
-# Relationships
-building_manager -> fire_system: "monitors / triggers fires\n[HTTPS, Swagger UI]"
-building_occupants -> fire_system: "presence sensed\n[occupancy model]"
-fire_system -> buildsim: "reads sensors /\ncommands actuators\n[REST]"
-fire_system -> external_compute: "offloads inference\n[ONNX, optional]"
-other_systems -> buildsim: "sensors / actuators\n[REST]"
-building_manager -> other_systems: "monitors" {style.stroke-dash: 3}
+operator -> fire_system: "starts/stops fires, triggers false alarms,\nclears the viewer  [REST control API]" {class: rel}
+operator -> buildsim: "watches doors, effects, alert cards\n[3D viewer]" {class: rel}
+operator -> observability: "monitors incidents, latencies,\ncontroller health  [Grafana]" {class: rel}
+occupants -> fire_system: "presence sensed  [occupancy model]" {class: rel}
+fire_system -> buildsim: "reads floor plans, door graph, equipment;\ncommands doors; pushes effects and cards  [REST]" {class: rel}
+fire_system -> llm: "asks for a verdict on each alert\n{is_fire, confidence}  [HTTP, ~2 s]" {class: rel}
+fire_system -> observability: "readings, decisions, verdicts, heartbeats\n[MQTT → TimescaleDB]" {class: rel}
+other_systems -> buildsim: "sensors / actuators  [REST]" {class: rel; style.stroke-dash: 3}
