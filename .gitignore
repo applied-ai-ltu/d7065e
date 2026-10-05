@@ -94,3 +94,10 @@ docker-compose.override.yml
 !**/secrets.py
 !src/fds/secrets.py
 edge/detector.onnx
+
+# report figures and diagrams are deliverables
+!docs/diagrams/*.png
+!docs/diagrams/*.pdf
+!docs/diagrams/*.svg
+!docs/figures/*.png
+!docs/figures/*.pdf
