@@ -1,0 +1,51 @@
+direction: right
+
+classes: {
+  locked: {style: {border-radius: 20; stroke: "#2a7f62"; fill: "#eef7ea"; font-size: 14; bold: true; stroke-width: 2}}
+  released: {style: {border-radius: 20; stroke: "#c0392b"; fill: "#fdeeec"; font-size: 14; bold: true; stroke-width: 2}}
+  edge: {style: {stroke: "#1f5fbf"; font-color: "#1f5fbf"; font-size: 12}}
+  server: {style: {stroke: "#6c3fb5"; font-color: "#6c3fb5"; font-size: 12}}
+  guard: {style: {stroke: "#555"; font-color: "#555"; font-size: 12; stroke-dash: 3}}
+  box: {style: {stroke-width: 2; border-radius: 8; font-size: 15; bold: true}}
+}
+
+title: "Fire doors of ONE floor — who may open them, who may close them" {
+  shape: text
+  style.font-size: 18
+  style.bold: true
+  near: top-center
+}
+
+floor: "" {
+  class: box
+  style.stroke: transparent
+  style.fill: transparent
+
+  locked: "LOCKED\n(closed_locked)\nnormal state" {class: locked}
+  own: "RELEASED — own release\nthis floor's controller confirmed\na fire on this floor\n(own_release = true)" {class: released}
+  srv: "RELEASED — server release\nfire on ANOTHER floor;\nserver commanded release\n(server_release = true)" {class: released}
+  both: "RELEASED — both\nown fire and a cross-floor\nrelease are active" {class: released}
+
+  locked -> own: "edge: FIRE confirmed on this floor\n(same 5 s tick, no server needed)" {class: edge}
+  locked -> srv: "server: commands/<floor>/doors release\n(cross-floor, once per incident)" {class: server}
+  own -> both: "server: cross-floor release arrives" {class: server}
+  srv -> both: "edge: own fire confirmed" {class: edge}
+
+  own -> locked: "server: stand-down for the LAST confirmed room\nwith floor_clear = true\n(edge checks: no room still critical)" {class: server}
+  both -> srv: "stand-down, floor_clear = true\n→ own_release cleared, doors STAY open\n(server release still active)" {class: guard}
+  srv -> locked: "server: commands/<floor>/doors lock\n(ALL CLEAR: no room confirmed or watched\nanywhere in the building)" {class: server}
+  both -> own: "server: ALL CLEAR lock\n→ ignored while an own fire is confirmed" {class: guard}
+}
+
+rules: |md
+  **Rules that make this survive restarts and failover**
+
+  - Opening is cheap and safe: either tier may release; the edge never waits for the server to open its own floor.
+  - Closing needs agreement: the edge re-locks only when the *floor* is clear, and refuses a stand-down while a room still reads critical (smoke ≥ 10 and CO ≥ 20) — `stand_down_refused` is sent back and the room is re-confirmed.
+  - A controller that just started (restart, failover) has no memory of what it released. Every stand-down therefore carries `floor_clear` and `relock`, computed by the server from its own view; `relock = true` makes a fresh controller lock even though it never opened.
+  - The ALL CLEAR `lock` is unconditional for a floor without an own fire, idempotent, and skipped by a controller that already wrote that state in this process.
+  - A floor under server takeover is actuated directly through BuildSim; the same state machine applies, with the server playing both roles.
+| {
+  style.font-size: 13
+  near: bottom-center
+}

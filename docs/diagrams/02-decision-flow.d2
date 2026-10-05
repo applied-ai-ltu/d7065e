@@ -1,0 +1,80 @@
+grid-columns: 2
+grid-gap: 90
+
+classes: {
+  tier: {style: {stroke-width: 2; border-radius: 8; font-size: 16; bold: true}}
+  step: {style: {border-radius: 6; stroke: "#1f5fbf"; fill: "#f5f9ff"; font-size: 13}}
+  decision: {shape: diamond; style: {stroke: "#7a4b00"; fill: "#fff6e0"; font-size: 13}}
+  act: {style: {border-radius: 6; stroke: "#c0392b"; fill: "#fdeeec"; font-size: 13; bold: true}}
+  calm: {style: {border-radius: 6; stroke: "#2a7f62"; fill: "#eef7ea"; font-size: 13}}
+  yes: {style: {stroke: "#c0392b"; font-color: "#c0392b"; font-size: 12}}
+  no: {style: {stroke: "#555"; font-color: "#555"; font-size: 12}}
+  msg: {style: {stroke: "#6c3fb5"; font-color: "#6c3fb5"; font-size: 12; stroke-dash: 3}}
+}
+
+t1: "TIER 1 — edge controller (per floor, per room, every 5 s)" {
+  class: tier
+  direction: down
+  style.fill: "#e8f1fb"
+
+  readings: "readings window\nsmoke · CO · temperature (deque per sensor)" {class: step}
+  stale: "sensor stale?\nvalue unchanged ≥ 60 s" {class: step}
+  rule: "smoke ≥ 10\nand CO ≥ 20 ?" {class: decision}
+  rule2: "CO stale and\nsmoke ≥ 20 ?" {class: decision}
+  fire: "FIRE — release every door on this floor\n(first fire only), alert server" {class: act}
+  band: "smoke ≥ 5 ?" {class: decision}
+  ifm: "isolation forest (ONNX)\nanomaly ?  p50 18 ms" {class: decision}
+  net: "smoke ≥ 10 ?" {class: decision}
+  possible: "POSSIBLE — alert server\n(no local action)" {class: step}
+  normal: "normal" {class: calm}
+  clear: "publish clear when a candidate\ndrops below threshold" {class: calm}
+
+  readings -> stale -> rule
+  rule -> fire: "yes" {class: yes}
+  rule -> rule2: "no" {class: no}
+  rule2 -> fire: "yes" {class: yes}
+  rule2 -> band: "no" {class: no}
+  band -> ifm: "yes" {class: no}
+  band -> normal: "no" {class: no}
+  ifm -> possible: "anomaly" {class: yes}
+  ifm -> net: "no" {class: no}
+  net -> possible: "yes (safety net)" {class: yes}
+  net -> normal: "no" {class: no}
+  normal -> clear {style.stroke-dash: 3}
+}
+
+t2: "TIER 2 — server agent (per alert, 3 in parallel)" {
+  class: tier
+  direction: down
+  style.fill: "#fdf1e4"
+
+  dedupe: "dedupe\nsame room + severity within 60 s → drop\nconfirmed room → never re-assessed" {class: step}
+  features: "features: readings, rates, faulty-sensor list,\nspread risk (door graph), evacuation route" {class: step}
+  llm: "LLM verdict  {is_fire, confidence, reasoning, alert}\nQwen2.5-14B · p50 2.1 s\n(unreachable → rule-based fallback)" {class: step}
+  gate: "is_fire and\nconfidence ≥ 0.7 ?" {class: decision}
+  confirm: "CONFIRM\nrelease doors on the other floors (once per incident)\nevacuation routes · viewer effects + red card\nlog confirm" {class: act}
+  watch: "WATCH 60 s\norange card · log watch_pending" {class: step}
+  wtick: "after 60 s, live sensors:\nsmoke < 2 and CO < 5 ?" {class: decision}
+  wfire: "smoke ≥ 10 and CO ≥ 20 ?" {class: decision}
+  escalate: "ESCALATE on readings\n(same as confirm)" {class: act}
+  standdown: "STAND-DOWN to the edge\nfloor_clear · relock\nremove card" {class: calm}
+  allclear: "ALL CLEAR\nlock every floor · clear viewer" {class: calm}
+  confirmed_watch: "confirmed room:\nreadings clear for 60 s ?" {class: decision}
+
+  dedupe -> features -> llm -> gate
+  gate -> confirm: "yes" {class: yes}
+  gate -> watch: "no" {class: no}
+  watch -> wtick
+  wtick -> standdown: "yes" {class: no}
+  wtick -> wfire: "no" {class: no}
+  wfire -> escalate: "yes" {class: yes}
+  wfire -> watch: "no — keep watching" {class: no}
+  confirm -> confirmed_watch
+  escalate -> confirmed_watch
+  confirmed_watch -> standdown: "yes" {class: no}
+  standdown -> allclear: "when no room is\nconfirmed or watched" {class: no}
+}
+
+t1.fire -> t2.dedupe: "alerts/<floor>/<room>  severity=confirmed|critical" {class: msg}
+t1.possible -> t2.dedupe: "alerts/<floor>/<room>  severity=warning" {class: msg}
+t2.standdown -> t1.clear: "commands/<floor>/stand-down\n(edge re-locks if floor clear and it owns the release)" {class: msg}
