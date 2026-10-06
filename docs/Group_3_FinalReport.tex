@@ -144,11 +144,10 @@ Measured on the homelab cluster during the acceptance run of 3--4 October 2026: 
 \bottomrule
 \end{longtable}
 
-\textbf{Changes since the proposal.} Four design changes were made because the evidence demanded them.
+\textbf{Changes since the proposal.} Three design changes were made because the evidence demanded them.
 \begin{enumerate}\tightlist
   \item \textbf{From one agent to two tiers.} The proposal had a single server agent polling BuildSim and deciding everything, with the LLM on the critical path. Measured LLM latency (5--7\,s per plan) and the realisation that door release must not depend on a server made the case for a per-floor edge controller that acts first and reports second. The LLM moved off the life-safety path and now only confirms, rejects and coordinates.
   \item \textbf{The LLM returns a verdict, not a plan.} The proposal had the LLM generate the response plan (sprinklers, doors, routes). The plan is now derived deterministically from a verdict \texttt{\{is\_fire, confidence\}}; sprinklers are mechanical in the physics model and never commanded. This halved the verdict latency (5.2\,s to 2.1\,s p50) and removed a class of unsafe plans.
-  \item \textbf{GEPA was dropped.} Self-improving prompts added complexity without measurable benefit over a static verdict prompt; the effort went into failover, takeover and the retraining loop instead.
   \item \textbf{Control moved out of Grafana.} The Business Forms plugin proved unsuitable for button control; fire control is a small FastAPI service and Grafana is monitoring only. Scope grew from one room to the whole building once the gateway was parameterised by floor.
 \end{enumerate}
 
