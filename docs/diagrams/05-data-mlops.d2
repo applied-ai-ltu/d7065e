@@ -1,4 +1,4 @@
-direction: right
+direction: down
 
 classes: {
   src: {style: {border-radius: 6; stroke: "#1f5fbf"; fill: "#f5f9ff"; font-size: 13}}
@@ -25,7 +25,7 @@ db: "TimescaleDB  (fire_detection_sim)\nsensor_readings  183 M rows · 18 GB\ned
 
 grafana: "Grafana\nOperations · Technical" {class: ui}
 
-retrain: "fds.models.retrain  (ClearML task)\n1. per-room 5 s windows from real readings\n2. + windows the LLM rejected (×20)\n3. + augmented nuisance events (smoke, no CO)\n4. IsolationForest, contamination 0.02\n5. evaluate: real normal rooms, LLM-labelled fires,\n   held-out nuisance, vs. the deployed model\n6. export ONNX, check sklearn/ONNX parity (1.000)" {class: job}
+retrain: "fds.models.retrain  (ClearML task)\n1. per-room 5 s windows from real readings\n2. + windows the LLM rejected (×20)\n3. + augmented false alarms (smoke, no CO)\n4. IsolationForest, contamination 0.02\n5. evaluate: real normal rooms, LLM-labelled fires,\n   held-out false alarms, vs. the deployed model\n6. export ONNX, check sklearn/ONNX parity (1.000)" {class: job}
 
 onnx: "detector.onnx" {class: model}
 
@@ -41,8 +41,3 @@ onnx -> deploy {class: loop}
 deploy -> live.edge: "new model on every controller" {class: loop}
 live.agent -> retrain: "verdicts are the labels:\nconfirm → fire window\nwatch/stand-down → not-fire window" {class: loop; style.stroke-dash: 3}
 
-result: "Weekend run (4 Oct): retraining on 16 000 real normal windows, 36 LLM-confirmed fire windows, 16 LLM-rejected\nand 1 600 augmented nuisance windows reproduced the deployed model (real-normal 0.997 vs 0.998, fire detection\n0.917 vs 0.917, ONNX parity 1.000), so the deployed model was kept." {
-  shape: text
-  style.font-size: 12
-  near: bottom-center
-}

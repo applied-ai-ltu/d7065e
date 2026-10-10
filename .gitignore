@@ -111,13 +111,3 @@ docs/*.fls
 docs/*.fdb_latexmk
 docs/*.synctex.gz
 !docs/Group_3_FinalReport.pdf
-
-# LaTeX build files
-docs/*.aux
-docs/*.log
-docs/*.toc
-docs/*.out
-docs/*.fls
-docs/*.fdb_latexmk
-docs/*.synctex.gz
-!docs/Group_3_FinalReport.pdf

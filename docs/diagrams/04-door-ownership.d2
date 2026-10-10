@@ -1,4 +1,4 @@
-direction: right
+direction: down
 
 classes: {
   locked: {style: {border-radius: 20; stroke: "#2a7f62"; fill: "#eef7ea"; font-size: 14; bold: true; stroke-width: 2}}
@@ -37,15 +37,3 @@ floor: "" {
   both -> own: "server: ALL CLEAR lock\n→ ignored while an own fire is confirmed" {class: guard}
 }
 
-rules: |md
-  **Rules that make this survive restarts and failover**
-
-  - Opening is cheap and safe: either tier may release; the edge never waits for the server to open its own floor.
-  - Closing needs agreement: the edge re-locks only when the *floor* is clear, and refuses a stand-down while a room still reads critical (smoke ≥ 10 and CO ≥ 20) — `stand_down_refused` is sent back and the room is re-confirmed.
-  - A controller that just started (restart, failover) has no memory of what it released. Every stand-down therefore carries `floor_clear` and `relock`, computed by the server from its own view; `relock = true` makes a fresh controller lock even though it never opened.
-  - The ALL CLEAR `lock` is unconditional for a floor without an own fire, idempotent, and skipped by a controller that already wrote that state in this process.
-  - A floor under server takeover is actuated directly through BuildSim; the same state machine applies, with the server playing both roles.
-| {
-  style.font-size: 13
-  near: bottom-center
-}

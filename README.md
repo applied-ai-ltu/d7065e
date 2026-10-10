@@ -12,7 +12,7 @@ LLM is down. Tier 2 is a server agent that asks an LLM for a verdict on every ed
 coordinates the other floors, computes evacuation routes, drives the 3D viewer and stands
 the building down when readings are clear.
 
-Measured on the homelab cluster (acceptance run, 3–4 Oct 2026):
+Measured on the project cluster (acceptance run, 3–4 Oct 2026):
 
 | Metric | Value |
 |---|---|
@@ -199,7 +199,7 @@ python -m fds.models.retrain
 ```
 
 Builds training windows from the real readings (per-room 5 s windows), adds the windows the
-LLM rejected and augmented nuisance events, fits the isolation forest (contamination 0.02),
+LLM rejected and augmented false-alarm windows, fits the isolation forest (contamination 0.02),
 evaluates against the LLM-labelled fires and real normal rooms, compares with the deployed
 model, exports ONNX and checks sklearn/ONNX parity. Logged to ClearML. Deploy a new model
 with `scripts/deploy.sh edge`.
@@ -208,7 +208,7 @@ with `scripts/deploy.sh edge`.
 
 ```bash
 ruff check . && ruff format --check .
-python -m pytest -q --ignore=tests/test_buildsim.py --ignore=tests/test_evaluator.py   # 79 passed
+python -m pytest -q --ignore=tests/test_buildsim.py   # 79 passed
 ```
 
 `tests/test_buildsim.py` needs a live BuildSim. CI (`.github/workflows/ci-python.yaml`) runs
@@ -239,7 +239,7 @@ lint and the offline suite.
 | Deployment | k3s, node-local images, `deploy.sh` | ArgoCD GitOps | images never leave the cluster; GitOps added nothing and `selfHeal` conflicts with failover tests |
 | Secrets | Kubernetes Secret `fds-app`; Vault for tooling | Vault token in the pod | no root token in the namespace |
 
-## Homelab cluster
+## Cluster
 
 | Node | Role | Hardware |
 |---|---|---|
