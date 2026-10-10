@@ -6,10 +6,8 @@ Technical: how the two tiers behave — IF latency per node, alert->verdict late
 health, IF-vs-LLM agreement, pipeline throughput.
 
 Datasource UID is a placeholder; scripts/grafana_provision.py resolves it by name at push time.
-Panels marked (v1) are carried over from the original dashboards in grafana/v1/.
 """
 
-import copy
 import json
 from pathlib import Path
 
@@ -223,21 +221,6 @@ def flagged_readings(sensor_type, title, x, y, w, h, unit=None):
     )
 
 
-def v1_panel(v1, title, x, y, w, h, new_title=None):
-    """Carry a panel over from the v1 dashboard, normalised to the placeholder datasource."""
-    src = next(p for p in v1["panels"] if p.get("title") == title)
-    p = copy.deepcopy(src)
-    p["id"] = next(_ids)
-    p["gridPos"] = {"x": x, "y": y, "w": w, "h": h}
-    p["datasource"] = DS
-    for t in p.get("targets", []):
-        t["datasource"] = DS
-    if new_title:
-        p["title"] = new_title
-    p["description"] = (p.get("description") or "") + " (carried over from v1)"
-    return p
-
-
 VERDICT_MAPPINGS = [
     {
         "type": "value",
@@ -322,7 +305,7 @@ FLOOR_VAR = {
 
 
 # --------------------------------------------------------------- operations
-def build_operations(v1):
+def build_operations():
     last_state = f"""
         SELECT DISTINCT ON (room) room, level, override_type FROM {S}.llm_overrides
         WHERE {NOT_META} AND time > NOW() - INTERVAL '3 hours'
@@ -421,7 +404,7 @@ def build_operations(v1):
                 bool_override("alive", "alive", "SILENT"),
                 bool_override("acting", "ACTING", "standby"),
             ],
-            desc="Active on the Pi, standby on infinity-magic. A standby promotes after 30 s of silence.",
+            desc="Active on the Raspberry Pi, standby on the amd64 node. A standby promotes after 30 s of silence.",
         ),
         table(
             "Door state per floor",
@@ -583,7 +566,17 @@ def build_operations(v1):
             FROM {S}.edge_decisions WHERE kind = 'alert' AND $__timeFilter(time) AND {FLOOR}
             ORDER BY time DESC LIMIT 100""",
         ),
-        v1_panel(v1, "Fire Events", 0, 44, 24, 7, new_title="LLM assessments (fire_events)"),
+        table(
+            "LLM assessments (fire_events)",
+            0,
+            44,
+            24,
+            7,
+            f"""
+            SELECT time, event_type, level || '/' || room AS location, severity, details::text
+            FROM {S}.fire_events WHERE $__timeFilter(time) AND {FLOOR}
+            ORDER BY time DESC LIMIT 30""",
+        ),
     ]
     return dashboard(
         "731d813a-12da-44c0-97b4-91099ea1a1cc",
@@ -600,7 +593,7 @@ def build_operations(v1):
 
 
 # ---------------------------------------------------------------- technical
-def build_technical(v1):
+def build_technical():
     alert_to_verdict = f"""
         SELECT o.time, o.room, o.override_type,
                (SELECT MAX(a.time) FROM {S}.edge_decisions a
@@ -707,7 +700,7 @@ def build_technical(v1):
             GROUP BY 1, 2 ORDER BY 1""")
             ],
             unit="ms",
-            desc="Pi 400 (arm64) vs infinity-magic (amd64, standby) vs proart (server takeover)",
+            desc="Pi 400 (arm64, active) vs the amd64 standby node vs the server (takeover)",
         ),
         timeseries(
             "Alert → LLM verdict latency",
@@ -883,7 +876,6 @@ def build_technical(v1):
             thresholds=[{"color": "blue", "value": None}],
             h=8,
         ),
-        v1_panel(v1, "External Tools", 0, 36, 24, 4),
     ]
     return dashboard(
         "tech-d7065e",
@@ -899,11 +891,9 @@ def build_technical(v1):
 
 
 def main():
-    v1_ops = json.loads((HERE / "v1" / "operations.json").read_text())
-    v1_tech = json.loads((HERE / "v1" / "technical.json").read_text())
     for name, dash in [
-        ("operations", build_operations(v1_ops)),
-        ("technical", build_technical(v1_tech)),
+        ("operations", build_operations()),
+        ("technical", build_technical()),
     ]:
         out = HERE / f"{name}.json"
         out.write_text(json.dumps(dash, indent=2) + "\n")

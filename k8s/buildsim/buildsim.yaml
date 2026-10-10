@@ -43,7 +43,7 @@ spec:
               cpu: 500m
               memory: 256Mi
       nodeSelector:
-        kubernetes.io/hostname: proart-master-01
+        fds-role: server
 ---
 apiVersion: v1
 kind: Service

@@ -372,7 +372,7 @@ the model's inference time:
 { "room": "A109", "floor": "level0", "decision": "fire",
   "severity": "confirmed", "smoke": 14.29, "co": 37.68,
   "temperature": 17.63, "stale": [], "if_anomaly": true,
-  "if_ms": 17.49, "node": "pi400-master-01", "role": "active" }
+  "if_ms": 17.49, "node": "edge-node-1", "role": "active" }
 \end{lstlisting}
 
 \begin{longtable}[]{@{}
@@ -566,15 +566,15 @@ everything else on the server node.
   >{\raggedright\arraybackslash}p{0.21\linewidth}
   >{\raggedright\arraybackslash}p{0.50\linewidth}@{}}
 \toprule
-\textbf{Role (node)} & \textbf{Hardware} & \textbf{What runs there and why} \\
+\textbf{Node} & \textbf{Hardware} & \textbf{What runs there and why} \\
 \midrule
 \endhead
-Edge node (\texttt{pi400-master-01}) & Raspberry Pi 400, ARM64, 4\,GB & The three active edge 
+Edge node & Raspberry Pi 400, ARM64, 4\,GB & The three active edge 
 controllers (150\,m CPU / 192\,Mi requested each). This is the role a fire panel has in a real 
 building: detection and door release with no dependency on the rest of the cluster. \\
-Standby node (\texttt{infinity-magic}) & amd64 worker & The three standby controllers, same image and 
+Standby node & amd64 worker & The three standby controllers, same image and 
 spec, on a different node so that one node failure cannot take both controllers of a floor. \\
-Server node (\texttt{proart-master-01}) & Ryzen 9 9950X, 128\,GB, RTX 5060 Ti 16\,GB & 
+Server node & Ryzen 9 9950X, 128\,GB, RTX 5060 Ti 16\,GB & 
 Control plane; \texttt{fds-server} (physics, agent, pipeline, control API); BuildSim; the 
 LLM (SGLang behind LiteLLM, namespace \texttt{ai-inference}); Mosquitto and 
 TimescaleDB (\texttt{data-infra}); Grafana, Phoenix, ClearML, Vault. \\

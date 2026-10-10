@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Build both images on ProArt, ship the edge image to each edge node's containerd
-# (arm64 for the Pi, amd64 for infinity-magic), import the server image locally, apply.
+# Build both images on the server node, ship the edge image to each edge node's containerd
+# (arm64 for the Pi, amd64 for the standby node), import the server image locally, apply.
+# Nodes are found by their fds-role label (edge-active | edge-standby | server); override
+# with PI=<host> STANDBY=<host> if ssh needs a different name.
 #   scripts/deploy.sh            # everything
 #   scripts/deploy.sh edge       # edge image + edge deployments only
 #   scripts/deploy.sh server     # server image + server deployment only
@@ -10,8 +12,10 @@ cd "$(dirname "$0")/.."
 
 NS=ai-edge-intel-course
 DOCKER=${DOCKER:-"sudo docker"}
-PI=${PI:-pi400-master-01}
-STANDBY=${STANDBY:-infinity-magic}
+node_by_role() { kubectl get nodes -l "fds-role=$1" -o jsonpath='{.items[0].metadata.name}'; }
+PI=${PI:-$(node_by_role edge-active)}
+STANDBY=${STANDBY:-$(node_by_role edge-standby)}
+[ -n "$PI" ] && [ -n "$STANDBY" ] || { echo 'label the nodes first: kubectl label node <name> fds-role=edge-active|edge-standby|server'; exit 1; }
 WHAT=${1:-all}
 
 ensure_builder() {

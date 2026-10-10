@@ -39,7 +39,7 @@ spec:
       labels: {app: fds-server, tier: server}
     spec:
       nodeSelector:
-        kubernetes.io/hostname: proart-master-01
+        fds-role: server
       containers:
         - name: server
           image: fds-server:latest

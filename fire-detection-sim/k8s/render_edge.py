@@ -1,6 +1,6 @@
-"""Render k8s/edge.yaml: one Deployment per (floor, role), pinned to its node.
+"""Render k8s/edge.yaml: one Deployment per (floor, role), pinned to a node by its fds-role label.
 
-Active controllers run on the Raspberry Pi; standbys on infinity-magic with an
+Active controllers run on the Raspberry Pi; standbys on the amd64 worker with an
 identical pod spec, so a promoted standby behaves exactly like the active it replaces.
 """
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 NAMESPACE = "ai-edge-intel-course"
 FLOORS = ["level0", "level1", "level2"]
-NODES = {"active": "pi400-master-01", "standby": "infinity-magic"}
+NODES = {"active": "edge-active", "standby": "edge-standby"}  # fds-role node labels
 IMAGE = "fds-edge:latest"
 
 TEMPLATE = """\
@@ -28,7 +28,7 @@ spec:
       labels: {{app: fds-edge, tier: edge, floor: {floor}, role: {role}}}
     spec:
       nodeSelector:
-        kubernetes.io/hostname: {node}
+        fds-role: {node}
       terminationGracePeriodSeconds: 5
       containers:
         - name: edge

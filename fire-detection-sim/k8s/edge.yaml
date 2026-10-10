@@ -15,7 +15,7 @@ spec:
       labels: {app: fds-edge, tier: edge, floor: level0, role: active}
     spec:
       nodeSelector:
-        kubernetes.io/hostname: pi400-master-01
+        fds-role: edge-active
       terminationGracePeriodSeconds: 5
       containers:
         - name: edge
@@ -48,7 +48,7 @@ spec:
       labels: {app: fds-edge, tier: edge, floor: level0, role: standby}
     spec:
       nodeSelector:
-        kubernetes.io/hostname: infinity-magic
+        fds-role: edge-standby
       terminationGracePeriodSeconds: 5
       containers:
         - name: edge
@@ -81,7 +81,7 @@ spec:
       labels: {app: fds-edge, tier: edge, floor: level1, role: active}
     spec:
       nodeSelector:
-        kubernetes.io/hostname: pi400-master-01
+        fds-role: edge-active
       terminationGracePeriodSeconds: 5
       containers:
         - name: edge
@@ -114,7 +114,7 @@ spec:
       labels: {app: fds-edge, tier: edge, floor: level1, role: standby}
     spec:
       nodeSelector:
-        kubernetes.io/hostname: infinity-magic
+        fds-role: edge-standby
       terminationGracePeriodSeconds: 5
       containers:
         - name: edge
@@ -147,7 +147,7 @@ spec:
       labels: {app: fds-edge, tier: edge, floor: level2, role: active}
     spec:
       nodeSelector:
-        kubernetes.io/hostname: pi400-master-01
+        fds-role: edge-active
       terminationGracePeriodSeconds: 5
       containers:
         - name: edge
@@ -180,7 +180,7 @@ spec:
       labels: {app: fds-edge, tier: edge, floor: level2, role: standby}
     spec:
       nodeSelector:
-        kubernetes.io/hostname: infinity-magic
+        fds-role: edge-standby
       terminationGracePeriodSeconds: 5
       containers:
         - name: edge

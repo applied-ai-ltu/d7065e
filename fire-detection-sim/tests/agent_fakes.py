@@ -81,7 +81,7 @@ def alert(
         "temperature": temp,
         "if_anomaly": True,
         "if_ms": 1.0,
-        "node": "pi400-master-01",
+        "node": "edge-node-1",
         "role": "active",
     }
 

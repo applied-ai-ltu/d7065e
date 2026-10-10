@@ -439,7 +439,7 @@
           "sort": "desc"
         }
       },
-      "description": "Pi 400 (arm64) vs infinity-magic (amd64, standby) vs proart (server takeover)"
+      "description": "Pi 400 (arm64, active) vs the amd64 standby node vs the server (takeover)"
     },
     {
       "id": 24,
@@ -988,26 +988,6 @@
         "textMode": "value_and_name",
         "justifyMode": "center"
       }
-    },
-    {
-      "gridPos": {
-        "x": 0,
-        "y": 36,
-        "w": 24,
-        "h": 4
-      },
-      "id": 33,
-      "options": {
-        "content": "### \ud83d\udd17 External Monitoring\n\n| Tool | URL | Purpose |\n|---|---|---|\n| **Phoenix Traces** | [Open Phoenix](https://homelab:30600) | LLM call traces, latency, tokens |\n| **ClearML** | [Open ClearML](https://homelab:30808) | Model training runs, detector versions |\n| **BuildSim 3D** | [Open BuildSim](http://192.168.68.67:30909) | 3D building viewer with room highlights |\n| **Control API** | [Open Swagger](http://192.168.68.67:8089/docs) | Trigger fires, check status |\n",
-        "mode": "markdown"
-      },
-      "title": "External Tools",
-      "type": "text",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "DS_TIMESCALE"
-      },
-      "description": " (carried over from v1)"
     }
   ],
   "schemaVersion": 39,
