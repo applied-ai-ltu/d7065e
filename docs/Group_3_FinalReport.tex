@@ -545,7 +545,7 @@ stand-down carries \texttt{floor\_clear} and \texttt{relock} from the server's v
 ALL CLEAR lock is unconditional for a floor without a fire of its own. A floor under server 
 takeover follows the same state machine with the server in both roles.
 
-\fig{diagrams/04-door-ownership.pdf}{Door states of one floor and which tier may move between them.}{fig:doors}
+\fig[0.8\linewidth]{diagrams/04-door-ownership.pdf}{Door states of one floor and which tier may move between them.}{fig:doors}
 
 Each controller also has a small lifecycle of its own: it starts, discovers its doors (retrying 
 until BuildSim answers), connects to the broker (retrying with backoff), runs its tick, heartbeat, 
@@ -846,5 +846,17 @@ would & Accepted for this project; a stairwell-aware release along the affected 
 change at larger scale \\
 \bottomrule
 \end{longtable}
+
+%% ============================================================================
+\section*{Use of AI tools}
+%% ============================================================================
+
+AI coding assistants were used during this project. The architecture, the design decisions 
+in Section~4.4, the requirements, the test plan and the acceptance scenarios are my own, and 
+every decision in the report was taken and verified by me on the running system. The 
+assistants were used to write and refactor code from my specifications, to generate the 
+first drafts of unit tests and diagram sources, and to help find the cause of defects during 
+the acceptance run. All generated code was reviewed, run and tested by me before it was 
+committed, and the results reported in Section~11 were measured by me on the cluster.
 
 \end{document}

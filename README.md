@@ -246,3 +246,7 @@ lint and the offline suite.
 | proart-master-01 | control plane, server, BuildSim, GPU inference | Ryzen 9 9950X, 128 GB, RTX 5060 Ti 16 GB |
 | pi400-master-01 | active edge controllers | Raspberry Pi 400, ARM aarch64, 4 GB |
 | infinity-magic | standby edge controllers | amd64 worker |
+
+## Use of AI tools
+
+AI coding assistants were used to write and refactor code from the author's specifications and to draft tests and diagram sources. The architecture, design decisions, requirements and test plan are the author's own; all code was reviewed, run and tested by the author before being committed.

@@ -1,39 +1,23 @@
 direction: down
 
 classes: {
-  locked: {style: {border-radius: 20; stroke: "#2a7f62"; fill: "#eef7ea"; font-size: 14; bold: true; stroke-width: 2}}
-  released: {style: {border-radius: 20; stroke: "#c0392b"; fill: "#fdeeec"; font-size: 14; bold: true; stroke-width: 2}}
-  edge: {style: {stroke: "#1f5fbf"; font-color: "#1f5fbf"; font-size: 12}}
-  server: {style: {stroke: "#6c3fb5"; font-color: "#6c3fb5"; font-size: 12}}
-  guard: {style: {stroke: "#555"; font-color: "#555"; font-size: 12; stroke-dash: 3}}
-  box: {style: {stroke-width: 2; border-radius: 8; font-size: 15; bold: true}}
+  locked: {style: {border-radius: 20; stroke: "#2a7f62"; fill: "#eef7ea"; font-size: 20; bold: true; stroke-width: 2}}
+  released: {style: {border-radius: 20; stroke: "#c0392b"; fill: "#fdeeec"; font-size: 20; bold: true; stroke-width: 2}}
+  edge: {style: {stroke: "#1f5fbf"; font-color: "#1f5fbf"; font-size: 17; stroke-width: 2}}
+  server: {style: {stroke: "#6c3fb5"; font-color: "#6c3fb5"; font-size: 17; stroke-width: 2}}
+  guard: {style: {stroke: "#555"; font-color: "#555"; font-size: 17; stroke-dash: 3}}
 }
 
-title: "Fire doors of ONE floor — who may open them, who may close them" {
-  shape: text
-  style.font-size: 18
-  style.bold: true
-  near: top-center
-}
+locked: "LOCKED\n(closed_locked, normal state)" {class: locked}
+own: "RELEASED — own release\nthis floor's controller\nconfirmed a fire here\n(own_release = true)" {class: released}
+srv: "RELEASED — server release\nfire on another floor;\nserver commanded release\n(server_release = true)" {class: released}
+both: "RELEASED — both\nown fire and cross-floor\nrelease active" {class: released}
 
-floor: "" {
-  class: box
-  style.stroke: transparent
-  style.fill: transparent
-
-  locked: "LOCKED\n(closed_locked)\nnormal state" {class: locked}
-  own: "RELEASED — own release\nthis floor's controller confirmed\na fire on this floor\n(own_release = true)" {class: released}
-  srv: "RELEASED — server release\nfire on ANOTHER floor;\nserver commanded release\n(server_release = true)" {class: released}
-  both: "RELEASED — both\nown fire and a cross-floor\nrelease are active" {class: released}
-
-  locked -> own: "edge: FIRE confirmed on this floor\n(same 5 s tick, no server needed)" {class: edge}
-  locked -> srv: "server: commands/<floor>/doors release\n(cross-floor, once per incident)" {class: server}
-  own -> both: "server: cross-floor release arrives" {class: server}
-  srv -> both: "edge: own fire confirmed" {class: edge}
-
-  own -> locked: "server: stand-down for the LAST confirmed room\nwith floor_clear = true\n(edge checks: no room still critical)" {class: server}
-  both -> srv: "stand-down, floor_clear = true\n→ own_release cleared, doors STAY open\n(server release still active)" {class: guard}
-  srv -> locked: "server: commands/<floor>/doors lock\n(ALL CLEAR: no room confirmed or watched\nanywhere in the building)" {class: server}
-  both -> own: "server: ALL CLEAR lock\n→ ignored while an own fire is confirmed" {class: guard}
-}
-
+locked -> own: "edge: FIRE on this floor\n(same tick, no server)" {class: edge}
+locked -> srv: "server: doors release\n(cross-floor)" {class: server}
+own -> both: "server: cross-floor\nrelease arrives" {class: server}
+srv -> both: "edge: own fire\nconfirmed" {class: edge}
+own -> locked: "server: stand-down,\nfloor_clear = true\n(edge: no room critical)" {class: server}
+srv -> locked: "server: ALL CLEAR\ndoors lock" {class: server}
+both -> srv: "stand-down, floor_clear\n→ own release cleared,\ndoors stay open" {class: guard}
+both -> own: "ALL CLEAR lock\n→ ignored while own\nfire is confirmed" {class: guard}

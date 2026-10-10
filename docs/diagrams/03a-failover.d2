@@ -1,32 +1,29 @@
 shape: sequence_diagram
 
 classes: {
-  hb: {style: {stroke: "#8a8a8a"; stroke-dash: 3; font-size: 12; font-color: "#666"}}
-  alert: {style: {stroke: "#c0392b"; font-color: "#c0392b"; font-size: 12}}
-  cmd: {style: {stroke: "#2a7f62"; font-color: "#2a7f62"; font-size: 12}}
-  rest: {style: {stroke: "#1f5fbf"; font-color: "#1f5fbf"; font-size: 12}}
-  note: {style: {font-size: 12; fill: "#fff6e0"; stroke: "#7a4b00"}}
+  hb: {style: {stroke: "#8a8a8a"; stroke-dash: 3; font-size: 18; font-color: "#666"}}
+  alert: {style: {stroke: "#c0392b"; font-color: "#c0392b"; font-size: 18}}
+  cmd: {style: {stroke: "#2a7f62"; font-color: "#2a7f62"; font-size: 18}}
+  rest: {style: {stroke: "#1f5fbf"; font-color: "#1f5fbf"; font-size: 18}}
+  note: {style: {font-size: 17; fill: "#fff6e0"; stroke: "#7a4b00"}}
+  actor: {style: {font-size: 20}}
 }
 
-active: "edge active\n(pi400-master-01)"
-standby: "edge standby\n(infinity-magic)"
-server: "fds-server\n(Tier 2)"
-buildsim: "BuildSim\n(doors)"
+buildsim: "BuildSim" {class: actor}
+active: "edge level1 active\n(Pi)" {class: actor}
+server: "fds-server" {class: actor}
+standby: "edge level1 standby\n(amd64 node)" {class: actor}
 
-A: "Failover mid-incident (scenario 8): the active controller is lost while its floor is released" {
-  active -> buildsim: "PUT 46 doors closed_unlocked (own fire confirmed)" {class: rest}
-  active -> server: "alerts/level1/A209 confirmed" {class: alert}
-  server -> buildsim: "cross-floor: doors of level0 + level2 released" {class: rest}
-  active -> standby: "heartbeat/level1/active every 10 s" {class: hb}
-  active."pod deleted (kubectl delete pod)" {class: note}
-  standby."30 s without the active's heartbeat → PROMOTED (acting=True)" {class: note}
-  standby -> server: "alerts/level1/_controller decision=failover" {class: alert}
-  standby."keeps ticking on the same readings; doors untouched (never re-locked by a handover)" {class: note}
-  active."Deployment recreates the pod (21 s); empty state" {class: note}
-  active -> standby: "heartbeat resumes" {class: hb}
-  standby."DEMOTED (acting=False) 5 s after promotion" {class: note}
-  server -> active: "commands/level1/stand-down  room, floor_clear=true, relock=true" {class: cmd}
-  active -> buildsim: "PUT 46 doors closed_locked (relock hint covers the lost state)" {class: rest}
-  server -> active: "commands/*/doors action=lock  (ALL CLEAR, every floor)" {class: cmd}
-}
-
+active -> buildsim: "\nPUT 46 doors closed_unlocked  (own fire confirmed)" {class: rest}
+active -> server: "\nalert A209, severity = confirmed" {class: alert}
+server."confirmed: level0 and level2 doors released (cross-floor)" {class: note}
+active."heartbeat to the standby every 10 s" {class: note}
+active."pod deleted (kubectl delete pod)" {class: note}
+standby."30 s without the active's heartbeat → PROMOTED (acting = true)" {class: note}
+standby -> server: "\nalert: decision = failover" {class: alert}
+standby."keeps ticking on the same readings;\ndoors untouched (never re-locked by a handover)" {class: note}
+active."Deployment recreates the pod (21 s); empty state; heartbeat resumes" {class: note}
+standby."DEMOTED (acting = false), 5 s after promotion" {class: note}
+server -> active: "\nstand-down: floor_clear = true, relock = true" {class: cmd}
+active -> buildsim: "\nPUT 46 doors closed_locked  (relock covers the lost state)" {class: rest}
+server -> active: "\nALL CLEAR: doors: lock (every floor)" {class: cmd}

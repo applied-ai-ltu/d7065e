@@ -1,27 +1,24 @@
 shape: sequence_diagram
 
 classes: {
-  hb: {style: {stroke: "#8a8a8a"; stroke-dash: 3; font-size: 12; font-color: "#666"}}
-  alert: {style: {stroke: "#c0392b"; font-color: "#c0392b"; font-size: 12}}
-  cmd: {style: {stroke: "#2a7f62"; font-color: "#2a7f62"; font-size: 12}}
-  rest: {style: {stroke: "#1f5fbf"; font-color: "#1f5fbf"; font-size: 12}}
-  note: {style: {font-size: 12; fill: "#fff6e0"; stroke: "#7a4b00"}}
+  alert: {style: {stroke: "#c0392b"; font-color: "#c0392b"; font-size: 18}}
+  cmd: {style: {stroke: "#2a7f62"; font-color: "#2a7f62"; font-size: 18}}
+  rest: {style: {stroke: "#1f5fbf"; font-color: "#1f5fbf"; font-size: 18}}
+  note: {style: {font-size: 17; fill: "#fff6e0"; stroke: "#7a4b00"}}
+  llmnote: {style: {font-size: 17; fill: "#f6f0fc"; stroke: "#6c3fb5"}}
+  actor: {style: {font-size: 20}}
 }
 
-active: "edge active\n(pi400-master-01)"
-standby: "edge standby\n(infinity-magic)"
-server: "fds-server\n(Tier 2)"
-buildsim: "BuildSim\n(doors)"
+buildsim: "BuildSim" {class: actor}
+server: "fds-server" {class: actor}
+edge0: "edge level0\n(active, Pi)" {class: actor}
+edge2: "edge level2\n(active + standby)" {class: actor}
 
-B: "Server takeover (scenario 1): no controller on level2 at all" {
-  active."both level2 controllers scaled to 0" {class: note}
-  server."30 s without any level2 heartbeat (90 s grace after the server's own boot) → SERVER TAKEOVER of level2" {class: note}
-  server -> server: "subscribe building/level2/#; threshold rule on raw readings" {class: cmd}
-  active -> server: "alerts/level0/A109 confirmed (fire on another floor)" {class: alert}
-  server -> server: "LLM verdict 2.1 s → confirm" {class: cmd}
-  server -> active: "commands/level1/doors action=release" {class: cmd}
-  server -> buildsim: "PUT 37 level2 doors closed_unlocked  (direct: nobody listens on commands/level2)" {class: rest}
-  active."level2 controllers scaled back to 1" {class: note}
-  server."first level2 heartbeat → SERVER HANDBACK, unsubscribe building/level2/#" {class: note}
-  server -> buildsim: "ALL CLEAR: lock on level0, level1 and level2 (direct for a floor still under takeover)" {class: rest}
-}
+edge2."both level2 controllers scaled to 0" {class: note}
+server."30 s without any level2 heartbeat (90 s grace after the server's own boot)\n→ SERVER TAKEOVER of level2: subscribes to level2 readings, threshold rule" {class: note}
+edge0 -> server: "\nalert A109, severity = confirmed  (fire on level0)" {class: alert}
+server."LLM verdict 2.1 s → confirm; commands/level1/doors release" {class: llmnote}
+server -> buildsim: "\nPUT 37 level2 doors closed_unlocked  (direct: no controller on level2)" {class: rest}
+edge2."level2 controllers scaled back to 1" {class: note}
+server."first level2 heartbeat → HANDBACK, unsubscribes level2 readings" {class: note}
+server -> buildsim: "\nALL CLEAR: lock level2 doors directly; level0 and level1 via their controllers" {class: rest}
