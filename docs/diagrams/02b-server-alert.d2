@@ -1,0 +1,31 @@
+direction: down
+classes: {
+  step: {style: {border-radius: 6; stroke: "#1f5fbf"; fill: "#f5f9ff"; font-size: 24}}
+  decision: {shape: diamond; style: {stroke: "#7a4b00"; fill: "#fff6e0"; font-size: 24}}
+  act: {style: {border-radius: 6; stroke: "#c0392b"; fill: "#fdeeec"; font-size: 24; bold: true}}
+  calm: {style: {border-radius: 6; stroke: "#2a7f62"; fill: "#eef7ea"; font-size: 24}}
+  yes: {style: {stroke: "#c0392b"; font-color: "#c0392b"; font-size: 20}}
+  no: {style: {stroke: "#555"; font-color: "#555"; font-size: 20}}
+}
+dedupe: "alert from an edge controller\ndedupe: same room + severity within 60 s → drop;\nconfirmed room → never re-assessed\nfeatures: readings, rates, faulty-sensor list,\nspread risk (door graph), evacuation route" {class: step}
+llm: "LLM verdict  {is_fire, confidence, reasoning, alert}\nQwen2.5-14B · p50 2.1 s\n(unreachable → rule-based fallback)" {class: step}
+gate: "is_fire and\nconfidence ≥ 0.7 ?" {class: decision}
+confirm: "CONFIRM\nrelease doors on the other floors (once per incident)\nevacuation routes · viewer effects · red card" {class: act}
+watch: "WATCH 60 s\norange card" {class: step}
+wtick: "readings after 60 s\n(live sensors only) ?" {class: decision}
+escalate: "ESCALATE on readings\n(same as confirm)" {class: act}
+cw: "confirmed room:\nreadings clear for 60 s ?" {class: decision}
+standdown: "STAND-DOWN to the edge\nfloor_clear · relock · remove card" {class: calm}
+allclear: "ALL CLEAR\nlock every floor · clear viewer" {class: calm}
+
+dedupe -> llm -> gate
+gate -> confirm: "yes" {class: yes}
+gate -> watch: "no" {class: no}
+watch -> wtick
+wtick -> standdown: "smoke < 2 and CO < 5" {class: no}
+wtick -> escalate: "smoke ≥ 10 and CO ≥ 20" {class: yes}
+wtick -> watch: "in between: keep watching" {class: no}
+confirm -> cw
+escalate -> cw
+cw -> standdown: "yes" {class: no}
+standdown -> allclear: "when no room is\nconfirmed or watched" {class: no}

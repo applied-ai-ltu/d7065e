@@ -1,0 +1,27 @@
+direction: down
+classes: {
+  step: {style: {border-radius: 6; stroke: "#1f5fbf"; fill: "#f5f9ff"; font-size: 24}}
+  decision: {shape: diamond; style: {stroke: "#7a4b00"; fill: "#fff6e0"; font-size: 24}}
+  act: {style: {border-radius: 6; stroke: "#c0392b"; fill: "#fdeeec"; font-size: 24; bold: true}}
+  calm: {style: {border-radius: 6; stroke: "#2a7f62"; fill: "#eef7ea"; font-size: 24}}
+  yes: {style: {stroke: "#c0392b"; font-color: "#c0392b"; font-size: 20}}
+  no: {style: {stroke: "#555"; font-color: "#555"; font-size: 20}}
+}
+readings: "readings window per room\nsmoke · CO · temperature\nsensor stale if unchanged ≥ 60 s" {class: step}
+rule: "smoke ≥ 10 and CO ≥ 20 ?\nor CO stale and smoke ≥ 20 ?" {class: decision}
+fire: "FIRE\nrelease every door on this floor (first fire only)\nalert server: severity = confirmed" {class: act}
+band: "smoke ≥ 5 ?" {class: decision}
+ifm: "isolation forest (ONNX)\nanomaly ?  p50 18 ms" {class: decision}
+net: "smoke ≥ 10 ?" {class: decision}
+possible: "POSSIBLE\nalert server: severity = warning\n(no local action)" {class: step}
+normal: "normal\npublish clear when a\ncandidate drops below threshold" {class: calm}
+
+readings -> rule
+rule -> fire: "yes" {class: yes}
+rule -> band: "no" {class: no}
+band -> ifm: "yes" {class: no}
+band -> normal: "no" {class: no}
+ifm -> possible: "anomaly" {class: yes}
+ifm -> net: "no" {class: no}
+net -> possible: "yes (safety net)" {class: yes}
+net -> normal: "no" {class: no}

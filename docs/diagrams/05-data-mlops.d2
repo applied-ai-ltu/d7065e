@@ -1,43 +1,35 @@
 direction: down
 
 classes: {
-  src: {style: {border-radius: 6; stroke: "#1f5fbf"; fill: "#f5f9ff"; font-size: 13}}
-  store: {shape: cylinder; style: {stroke: "#6c3fb5"; fill: "#f6f0fc"; font-size: 13}}
-  job: {style: {border-radius: 6; stroke: "#7a4b00"; fill: "#fff6e0"; font-size: 13}}
-  model: {shape: hexagon; style: {stroke: "#2a7f62"; fill: "#eef7ea"; font-size: 13; bold: true}}
-  ui: {style: {border-radius: 6; stroke: "#8a8a8a"; fill: "#f4f4f4"; stroke-dash: 3; font-size: 13}}
-  flow: {style: {font-size: 12; stroke: "#444"; font-color: "#444"}}
-  loop: {style: {font-size: 12; stroke: "#2a7f62"; font-color: "#2a7f62"; stroke-width: 2}}
-  box: {style: {stroke-width: 2; border-radius: 8; font-size: 15; bold: true}}
+  src: {style: {border-radius: 6; stroke: "#1f5fbf"; fill: "#f5f9ff"; font-size: 20}}
+  store: {shape: cylinder; style: {stroke: "#6c3fb5"; fill: "#f6f0fc"; font-size: 20}}
+  job: {style: {border-radius: 6; stroke: "#7a4b00"; fill: "#fff6e0"; font-size: 20}}
+  model: {shape: hexagon; style: {stroke: "#2a7f62"; fill: "#eef7ea"; font-size: 20; bold: true}}
+  ui: {style: {border-radius: 6; stroke: "#8a8a8a"; fill: "#f4f4f4"; stroke-dash: 3; font-size: 20}}
+  flow: {style: {font-size: 18; stroke: "#444"; font-color: "#444"}}
+  loop: {style: {font-size: 18; stroke: "#2a7f62"; font-color: "#2a7f62"; stroke-width: 2}}
+  box: {style: {stroke-width: 2; border-radius: 8; font-size: 22; bold: true}}
 }
 
 live: "Live system" {
   class: box
   style.fill: "#fdf1e4"
-  gw: "sensor gateway\n956 spaces × 3 sensors\n~400 readings/s\nnoise · drift · stuck faults" {class: src}
-  edge: "edge controllers (×3)\ndecisions · alerts · door events\nheartbeats · if_ms" {class: src}
-  agent: "server agent\nverdicts (confirm / watch / stand-down)\nllm_ms · takeover · failover" {class: src}
+  gw: "sensor gateway\n956 spaces × 3 sensors, ~400 readings/s\nnoise · drift · stuck faults" {class: src}
+  edge: "edge controllers (×6)\ndecisions · alerts · door events\nheartbeats · if_ms" {class: src}
+  agent: "server agent\nverdicts: confirm / watch / stand-down\nllm_ms · takeover · failover" {class: src}
 }
 
-mq: "MQTT" {class: ui}
-
-db: "TimescaleDB  (fire_detection_sim)\nsensor_readings  183 M rows · 18 GB\nedge_decisions · heartbeats\nllm_overrides · fire_events" {class: store}
-
+db: "TimescaleDB\nsensor_readings · edge_decisions\nheartbeats · llm_overrides · fire_events" {class: store}
 grafana: "Grafana\nOperations · Technical" {class: ui}
-
-retrain: "fds.models.retrain  (ClearML task)\n1. per-room 5 s windows from real readings\n2. + windows the LLM rejected (×20)\n3. + augmented false alarms (smoke, no CO)\n4. IsolationForest, contamination 0.02\n5. evaluate: real normal rooms, LLM-labelled fires,\n   held-out false alarms, vs. the deployed model\n6. export ONNX, check sklearn/ONNX parity (1.000)" {class: job}
-
+retrain: "fds.models.retrain (ClearML task)\n1. per-room 5 s windows from real readings\n2. + windows the LLM rejected (×20)\n3. + augmented false alarms (smoke, no CO)\n4. IsolationForest, contamination 0.02\n5. evaluate vs. the deployed model\n6. export ONNX, check sklearn/ONNX parity" {class: job}
 onnx: "detector.onnx" {class: model}
+deploy: "scripts/deploy.sh edge\nbuild arm64 + amd64 → import on each node\nrollout restart of all six controllers" {class: job}
 
-deploy: "scripts/deploy.sh edge\nbuildx arm64 + amd64 → k3s ctr import\nrollout restart ×6" {class: job}
-
-live.gw -> mq -> db {class: flow}
-live.edge -> mq {class: flow}
-live.agent -> mq {class: flow}
-db -> grafana: "dashboards" {class: flow}
-db -> retrain: "sensor_readings\nllm_overrides (labels)" {class: loop}
-retrain -> onnx: "models/ + edge/" {class: loop}
+live.gw -> db: "MQTT" {class: flow}
+live.edge -> db: "MQTT" {class: flow}
+live.agent -> db: "MQTT" {class: flow}
+db -> grafana {class: flow}
+db -> retrain: "readings + verdicts\n(verdicts are the labels)" {class: loop}
+retrain -> onnx {class: loop}
 onnx -> deploy {class: loop}
-deploy -> live.edge: "new model on every controller" {class: loop}
-live.agent -> retrain: "verdicts are the labels:\nconfirm → fire window\nwatch/stand-down → not-fire window" {class: loop; style.stroke-dash: 3}
-
+deploy -> live.edge: "new model on\nevery controller" {class: loop}

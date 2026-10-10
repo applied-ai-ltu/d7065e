@@ -289,8 +289,8 @@ and the viewer reflect the new door state. The server is outside this loop.
 
 \subsection{4.3 Component diagram (C4 Level 3)}
 
-Figure~\ref{fig:decision} opens the two decision components: the edge controller's per-room tick 
-on the left, the server agent's per-alert handling on the right.
+Figures~\ref{fig:edge-tick} and \ref{fig:server-alert} show the two decision components: the edge 
+controller's per-room tick and the server agent's per-alert handling.
 
 \textbf{Tier 1, per room every 5\,s.} A deterministic multi-sensor rule is evaluated first: 
 smoke $\geq$ 10\,\%obs/m and CO $\geq$ 20\,ppm is a fire, and the learned model cannot override it. 
@@ -300,7 +300,9 @@ a room with smoke $\geq$ 5 that the model flags as anomalous is sent to the serv
 and a room with smoke $\geq$ 10 is sent even if the model is quiet. On the first \texttt{fire} on its 
 floor the controller releases every fire door it owns and alerts the server. Alerts are rate-limited 
 per room (on state change, on a 1.5$\times$ rise, or every 60\,s) so a long incident does not flood 
-the server.
+the server. 
+
+\fig[0.8\linewidth]{diagrams/02a-edge-tick.pdf}{Tier 1: one room, one tick. A \texttt{fire} or \texttt{possible} outcome is published to \texttt{alerts/<floor>/<room>}; red paths act, grey paths defer.}{fig:edge-tick}
 
 \textbf{Tier 2, per alert, three in parallel.} Alerts are de-duplicated: the same room and severity 
 within 60\,s is dropped, and a confirmed room is not re-assessed. The agent assembles what the LLM 
@@ -314,8 +316,8 @@ after 60\,s of clear readings. When no room anywhere is confirmed or on watch, A
 every floor and clears the viewer. If the LLM is unreachable, the fallback applies the same 
 multi-sensor rule with confidence 0.9 or 0.2.
 
-\fig{diagrams/02-decision-flow.pdf}{Decision components of both tiers. Red paths act; grey paths defer; 
-the purple dashed edges are the MQTT messages between the tiers.}{fig:decision}
+\fig[0.62\linewidth]{diagrams/02b-server-alert.pdf}{Tier 2: one alert. 
+The stand-down is sent on \texttt{commands/<floor>/stand-down}; the edge re-locks only if the floor is clear and it owns the release.}{fig:server-alert}
 
 \subsection{4.4 Design decisions and alternatives}
 
@@ -441,11 +443,10 @@ at random.
 
 \textbf{Tier 1: the edge controller} (\texttt{edge/edge\_controller.py}) runs as one process per 
 floor and role. It keeps a short window of readings per sensor per room, records when each 
-sensor's value last changed, and every 5\,s evaluates each candidate room as in 
-Figure~\ref{fig:decision}. The isolation forest runs through ONNX Runtime on six features 
-(smoke, CO, temperature and their rates); on the Pi 400 this takes 17.8\,ms p50 and 33\,ms p95 per 
-room. On the first \texttt{fire} on its floor the controller releases all of its doors with 16 
-concurrent PUTs, then alerts the server. When a candidate room drops back below threshold it 
+sensor's value last changed, and every 5\,s evaluates each candidate room as in Figure~\ref{fig:edge-tick}. 
+The isolation forest runs through ONNX Runtime on six features (smoke, CO, temperature and their rates); 
+on the Pi 400 this takes 17.8\,ms p50 and 33\,ms p95 per room. On the first \texttt{fire} on its floor the controller 
+releases all of its doors with 16 concurrent PUTs, then alerts the server. When a candidate room drops back below threshold it 
 publishes a \texttt{clear} decision, so the server's view of the room is never left on an old 
 value. It accepts three commands: \texttt{release} and \texttt{lock} for the doors, and 
 \texttt{stand-down} for a room, which it refuses if that room still reads critical. It re-locks 
@@ -454,7 +455,7 @@ because the controller is new. The standby runs the same code on the same readin
 with \texttt{acting=false}.
 
 \textbf{Tier 2: the server agent} (\texttt{src/fds/agent/agent.py}) consumes alerts from a queue 
-with three in flight. Its policy is the right-hand side of Figure~\ref{fig:decision}. Two rules 
+with three in flight. Its policy is Figure~\ref{fig:server-alert}. Two rules 
 protect the edge's decision. A doubted alert never undoes it: the floor's doors stay released 
 until the readings decide. And every stand-down carries what the server knows and the controller 
 may not: whether the floor is clear and whether to re-lock. The agent also keeps the per-floor 
@@ -495,7 +496,7 @@ with \texttt{if\_ms} and \texttt{if\_anomaly}), \texttt{heartbeats}, \texttt{llm
 verdicts, so the LLM's judgements become the labels for the next edge model 
 (Figure~\ref{fig:mlops}).
 
-\fig[0.72\linewidth]{diagrams/05-data-mlops.pdf}{Data pipeline and the retraining loop: readings and verdicts 
+\fig{diagrams/05-data-mlops.pdf}{Data pipeline and the retraining loop: readings and verdicts 
 flow into TimescaleDB; the retrain task turns verdicts into labels and ships a new ONNX model 
 to every controller.}{fig:mlops}
 
