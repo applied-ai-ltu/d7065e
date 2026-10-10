@@ -561,14 +561,14 @@ The system runs in namespace \texttt{ai-edge-intel-course} of a k3s cluster
 (Figure~\ref{fig:architecture}). Placement follows the two tiers: detection on the edge nodes, 
 everything else on the server node.
 
-\begin{longtable}[]{@{}
+\begin{center}\begin{tabular}{@{}
   >{\raggedright\arraybackslash}p{0.19\linewidth}
   >{\raggedright\arraybackslash}p{0.21\linewidth}
   >{\raggedright\arraybackslash}p{0.50\linewidth}@{}}
 \toprule
 \textbf{Node} & \textbf{Hardware} & \textbf{What runs there and why} \\
 \midrule
-\endhead
+
 Edge node & Raspberry Pi 400, ARM64, 4\,GB & The three active edge 
 controllers (150\,m CPU / 192\,Mi requested each). This is the role a fire panel has in a real 
 building: detection and door release with no dependency on the rest of the cluster. \\
@@ -579,7 +579,7 @@ Control plane; \texttt{fds-server} (physics, agent, pipeline, control API); Buil
 LLM (SGLang behind LiteLLM, namespace \texttt{ai-inference}); Mosquitto and 
 TimescaleDB (\texttt{data-infra}); Grafana, Phoenix, ClearML, Vault. \\
 \bottomrule
-\end{longtable}
+\end{tabular}\end{center}
 
 Images are built on the control plane with \texttt{buildx} for arm64 and amd64, copied to each 
 node and imported into containerd (imagePullPolicy: Never). \texttt{scripts/deploy.sh} 
