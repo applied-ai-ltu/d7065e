@@ -597,10 +597,10 @@ because starting it 45\,s ahead of the controllers once made it take over all th
 %% ============================================================================
 
 Testing has three layers. \textbf{Unit tests} run offline with the broker, BuildSim, the ONNX 
-session, the LLM and the database replaced by in-memory stand-ins: 79 tests covering the Tier-1 controller 
+session, the LLM and the database replaced by in-memory stand-ins: 68 tests covering the Tier-1 controller 
 (decision rule, alert gate, door ownership, failover, broker retry, stale sensors), the Tier-2 
 policy (dedupe, verdict gate, watch, stand-down, ALL CLEAR, takeover, viewer cards), the fallback 
-with the LLM unreachable, and the physics, sensor, detector, spread, evacuation and occupancy 
+with the LLM unreachable, and the physics, sensor gateway, detector, spread, evacuation and occupancy 
 models. CI runs \texttt{ruff} and the suite on every push. \textbf{Acceptance scenarios} run 
 against the live cluster with the viewer and the dashboards open; each has a pass criterion that 
 is checked in the server log, the controller logs, the database and BuildSim's door states 
@@ -625,8 +625,8 @@ T-06 & Baseline fire, 45\,s, all systems healthy & FR-01, FR-03, FR-04, FR-05, F
 T-07 & Fire on level0 and a smoke-only event on level1 within seconds & FR-02, SAF-04 & Parallel verdicts; level1 on watch and never escalates on its own; its doors released only by cross-floor release and re-locked only at ALL CLEAR \\
 T-08 & Delete the active controller pod while its floor is released & SAF-02, SAF-04 & Standby promotes within 30\,s; doors stay released; stand-down and re-lock through whichever controller is present; demote on return \\
 T-09 & Data and model: row counts, dashboards over 3\,h, retrain on the new data & NFR-03, NFR-04 & All tables grew; dashboards show every scenario; retrain metrics at or above the deployed model; ONNX parity 1.000 \\
-T-10 & CI, secret scan, pod spec review & NFR-05 & CI passes (\texttt{ruff} and 79 tests); no secrets in the repository; no Vault token in the namespace \\
-T-U & Unit suite & FR-05, FR-06, NFR-07 and all policy rules & 79 passed \\
+T-10 & CI, secret scan, pod spec review & NFR-05 & CI passes (\texttt{ruff} and 68 tests); no secrets in the repository; no Vault token in the namespace \\
+T-U & Unit suite & FR-05, FR-06, NFR-07 and all policy rules & 68 passed \\
 \bottomrule
 \end{longtable}
 

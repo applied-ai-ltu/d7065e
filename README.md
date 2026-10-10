@@ -89,7 +89,7 @@ fire-detection-sim/
   scripts/door_check.py       door states per floor straight from BuildSim
   scripts/db_check.py         row counts per table for a window
   scripts/grafana_provision.py  pushes grafana/*.json (built by grafana/build_dashboards.py)
-  tests/                      79 offline tests (MQTT, BuildSim, ONNX, LLM, DB all faked)
+  tests/                      68 offline tests (MQTT, BuildSim, ONNX, LLM, DB replaced by in-memory stand-ins)
   docs/figures/               screenshots used in the report
 ```
 
@@ -208,7 +208,7 @@ with `scripts/deploy.sh edge`.
 
 ```bash
 ruff check . && ruff format --check .
-python -m pytest -q --ignore=tests/test_buildsim.py   # 79 passed
+python -m pytest -q --ignore=tests/test_buildsim.py   # 68 passed
 ```
 
 `tests/test_buildsim.py` needs a live BuildSim. CI (`.github/workflows/ci-python.yaml`) runs
