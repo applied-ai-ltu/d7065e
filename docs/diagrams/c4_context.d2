@@ -1,7 +1,7 @@
 direction: down
 
 title: {
-  label: "C4 System Context (Level 1) — Fire Detection & Autonomous Response"
+  label: "C4 System Context (Level 1) — Fire Detection & Autonomous Response at the Edge"
   near: top-center
   shape: text
   style.font-size: 20
@@ -15,21 +15,17 @@ classes: {
   rel: {style: {font-size: 12}}
 }
 
-operator: "Building operator [Person]\nwatches viewer and dashboards,\ntriggers test fires and false alarms" {class: person}
-occupants: "Building occupants [Person]\npresence drives the occupancy model;\nevacuation routes are computed for them" {class: person}
+operator: "Building operator\nwatches viewer and dashboards,\ntriggers test fires and false alarms" {class: person}
 
 fire_system: "Fire Detection & Autonomous Response\n[Software System]\nTier 1: edge controllers per floor (Raspberry Pi) detect and release doors locally.\nTier 2: server agent confirms with an LLM, coordinates floors, stands the building down." {class: system}
 
-buildsim: "BuildSim\n[Software System]\nBuilding model of LTU A-huset: 950 rooms,\n124 fire doors, sprinklers, 3D viewer" {class: ext}
 llm: "LLM inference service\n[Software System]\nLiteLLM → SGLang, Qwen2.5-14B,\nself-hosted on the cluster GPU" {class: ext}
+buildsim: "BuildSim\n[Software System]\nBuilding model of LTU A-huset: 950 rooms,\n124 fire doors, sprinklers, 3D viewer" {class: ext}
 observability: "Observability\n[Software Systems]\nGrafana dashboards, Phoenix LLM traces,\nClearML training runs, TimescaleDB" {class: ext}
-other_systems: "Other building systems\n[Software Systems]\nVentilation, security, energy management\n(not integrated; share BuildSim)" {class: ext}
 
 operator -> fire_system: "starts/stops fires, triggers false alarms,\nclears the viewer  [REST control API]" {class: rel}
 operator -> buildsim: "watches doors, effects, alert cards\n[3D viewer]" {class: rel}
 operator -> observability: "monitors incidents, latencies,\ncontroller health  [Grafana]" {class: rel}
-occupants -> fire_system: "presence sensed  [occupancy model]" {class: rel}
-fire_system -> buildsim: "reads floor plans, door graph, equipment;\ncommands doors; pushes effects and cards  [REST]" {class: rel}
 fire_system -> llm: "asks for a verdict on each alert\n{is_fire, confidence}  [HTTP, ~2 s]" {class: rel}
+fire_system -> buildsim: "reads floor plans, door graph, equipment;\ncommands doors; pushes effects and cards  [REST]" {class: rel}
 fire_system -> observability: "readings, decisions, verdicts, heartbeats\n[MQTT → TimescaleDB]" {class: rel}
-other_systems -> buildsim: "sensors / actuators  [REST]" {class: rel; style.stroke-dash: 3}
