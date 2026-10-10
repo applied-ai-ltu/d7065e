@@ -1,5 +1,5 @@
 grid-rows: 4
-grid-gap: 70
+grid-gap: 60
 
 classes: {
   tier: {style: {stroke-width: 2; border-radius: 8; font-size: 16; bold: true}}
@@ -12,60 +12,53 @@ classes: {
   data: {style: {stroke: "#6c3fb5"; font-size: 12; font-color: "#6c3fb5"; stroke-dash: 3}}
 }
 
-tier1: "TIER 1 — edge controllers, one per floor" {
+tier1: "TIER 1 — edge controllers, one active and one standby per floor" {
   class: tier
   style.fill: "#e8f1fb"
-  grid-columns: 3
-  grid-gap: 30
-  pi: "pi400-master-01 · Raspberry Pi 400 (ARM64) · actives" {
+  grid-columns: 2
+  grid-gap: 40
+  pi: "Raspberry Pi 400 (ARM64) — actives" {
     class: host
     grid-columns: 3
     e0: "edge-level0-active" {class: pod}
     e1: "edge-level1-active" {class: pod}
     e2: "edge-level2-active" {class: pod}
   }
-  im: "infinity-magic · amd64 · standbys (same image and spec)" {
+  im: "amd64 worker — standbys (same image and spec)" {
     class: host
     grid-columns: 3
     s0: "edge-level0-standby" {class: pod}
     s1: "edge-level1-standby" {class: pod}
     s2: "edge-level2-standby" {class: pod}
   }
-  note: "Per floor, every 5 s: threshold rule + isolation forest\n(ONNX, p50 18 ms on the Pi). Releases its own floor's doors\nin the same tick. Heartbeat every 10 s; the standby promotes\nafter 30 s of silence. Works without server, broker or LLM." {
+}
+
+mid: "" {
+  style.stroke: transparent
+  style.fill: transparent
+  grid-columns: 3
+  grid-gap: 120
+  buildsim: "BuildSim\n3D viewer · 124 fire doors\nsprinklers · floor graph" {class: infra; style.fill: "#ffffff"; style.font-size: 14}
+  mq: "MQTT broker (Mosquitto)\n\nedge → server: alerts · decisions · heartbeat\nserver → edge: readings · commands" {
+    class: infra
+    style.fill: "#eef7ea"
+    style.stroke: "#2a7f62"
+    style.stroke-dash: 0
+    style.font-size: 13
+  }
+  note: "Every 5 s per floor: rule + isolation forest,\nown doors released in the same tick.\nHeartbeat 10 s; standby promotes after 30 s.\nWorks without server, broker or LLM." {
     style.font-size: 12
     style.stroke: transparent
     style.fill: transparent
   }
 }
 
-mqrow: "" {
-  style.stroke: transparent
-  style.fill: transparent
-  grid-columns: 3
-  grid-gap: 60
-  topics_up: |md
-    **edge → server** (red)
-    alerts/‹floor›/‹room› · decisions/‹floor›/‹room› · heartbeat/‹floor›/‹role›
-  | {style.font-size: 12}
-  mq: "mosquitto — MQTT broker (ns data-infra)" {
-    class: infra
-    style.fill: "#eef7ea"
-    style.stroke: "#2a7f62"
-    style.stroke-dash: 0
-    style.font-size: 14
-  }
-  topics_down: |md
-    **server → edge** (green)
-    building/‹floor›/‹room›/‹sensor› (readings) · commands/‹floor›/doors · commands/‹floor›/stand-down
-  | {style.font-size: 12}
-}
-
-tier2: "TIER 2 — fds-server (proart-master-01, NodePort 30089)" {
+tier2: "TIER 2 — fds-server" {
   class: tier
   style.fill: "#fdf1e4"
   grid-columns: 4
   grid-gap: 30
-  physics: "physics engine + sensor gateway\n956 spaces · spread along door graph\n· sensor faults (noise, drift, stuck)" {class: pod}
+  physics: "physics engine + sensor gateway\n956 spaces · spread along door graph\nsensor faults (noise, drift, stuck)" {class: pod}
   agent: "agent\nalert queue (3 parallel) → LLM verdict\n→ coordinate floors → watch /\nstand-down → ALL CLEAR" {class: pod}
   pipeline: "pipeline\nMQTT → TimescaleDB" {class: pod}
   api: "control API\nfire · false alarm\nviz/clear · status" {class: pod}
@@ -74,23 +67,22 @@ tier2: "TIER 2 — fds-server (proart-master-01, NodePort 30089)" {
 ext: "" {
   style.stroke: transparent
   style.fill: transparent
-  grid-columns: 4
-  grid-gap: 30
-  buildsim: "BuildSim (NodePort 30909)\n3D viewer · 124 fire doors\nsprinklers · floor graph" {class: infra; style.fill: "#ffffff"}
-  llm: "LiteLLM → SGLang\nQwen2.5-14B (ns ai-inference, GPU)\nverdict p50 2.1 s · p95 3.2 s" {class: infra}
-  db: "TimescaleDB (ns data-infra)\nsensor_readings 18 GB · edge_decisions\nheartbeats · llm_overrides" {class: infra}
-  obs: "Grafana (30300) · Phoenix · ClearML\nretrain → detector.onnx → deploy.sh edge" {class: infra}
+  grid-columns: 3
+  grid-gap: 60
+  llm: "LLM inference\nLiteLLM → SGLang, Qwen2.5-14B (GPU)\nverdict p50 2.1 s · p95 3.2 s" {class: infra}
+  db: "TimescaleDB\nsensor_readings · edge_decisions\nheartbeats · llm_overrides" {class: infra}
+  obs: "Grafana · Phoenix · ClearML\nretrain → detector.onnx → deploy.sh edge" {class: infra}
 }
 
-tier1.pi -> mqrow.mq: {class: alert}
-mqrow.mq -> tier1.im: {class: mqtt}
-tier2.physics -> mqrow.mq: {class: mqtt}
-mqrow.mq -> tier2.agent: {class: alert}
-mqrow.mq -> tier2.pipeline: {class: mqtt}
+tier1.pi -> mid.mq: {class: alert}
+mid.mq -> tier1.im: {class: mqtt}
+tier2.physics -> mid.mq: {class: mqtt}
+mid.mq -> tier2.agent: {class: alert}
+mid.mq -> tier2.pipeline: {class: mqtt}
 
-tier2.agent -> ext.buildsim: "effects · cards\ndoors of a taken-over floor" {class: rest}
-ext.buildsim -> tier2.physics: "floor plans\ndoor graph" {class: rest; style.stroke-dash: 3}
+tier1.pi -> mid.buildsim: "PUT door state\n(own floor)" {class: rest}
+tier2.agent -> mid.buildsim: "effects · cards ·\ndoors of a taken-over floor" {class: rest}
+mid.buildsim -> tier2.physics: "floor plans\ndoor graph" {class: rest; style.stroke-dash: 3}
 tier2.agent -> ext.llm: {class: data; style.stroke-dash: 0}
 tier2.pipeline -> ext.db {class: data}
 ext.db -> ext.obs {class: data}
-tier1.pi -> ext.buildsim: "PUT door state (own floor)" {class: rest}

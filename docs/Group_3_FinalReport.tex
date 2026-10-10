@@ -279,11 +279,9 @@ pipeline and the control API. MQTT connects the tiers: readings go down to the c
 alerts, decisions and heartbeats go up to the server; commands go down again. Both tiers reach 
 BuildSim by REST; only Tier 2 reaches the LLM.
 
-\begin{landscape}
-\fig[0.88\linewidth]{diagrams/01-architecture.pdf}{Containers and their placement on the k3s cluster. 
+\fig{diagrams/01-architecture.pdf}{Containers and their placement on the k3s cluster. 
 Red edges carry alerts and heartbeats; green edges carry readings and commands; 
 blue edges are REST calls to BuildSim; purple edges are data and model flows.}{fig:architecture}
-\end{landscape}
 
 The control loop is: the physics engine advances the rooms and publishes degraded readings; the 
 controller on that floor decides; it writes door state into BuildSim; on the next tick the engine 
