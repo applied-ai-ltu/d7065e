@@ -1,39 +1,30 @@
 shape: sequence_diagram
 
 classes: {
-  hb: {style: {stroke: "#8a8a8a"; stroke-dash: 3; font-size: 12; font-color: "#666"}}
-  alert: {style: {stroke: "#c0392b"; font-color: "#c0392b"; font-size: 12}}
-  cmd: {style: {stroke: "#2a7f62"; font-color: "#2a7f62"; font-size: 12}}
-  rest: {style: {stroke: "#1f5fbf"; font-color: "#1f5fbf"; font-size: 12}}
-  llm: {style: {stroke: "#6c3fb5"; font-color: "#6c3fb5"; font-size: 12}}
-  note: {style: {font-size: 12; fill: "#fff6e0"; stroke: "#7a4b00"}}
+  alert: {style: {stroke: "#c0392b"; font-color: "#c0392b"; font-size: 18}}
+  cmd: {style: {stroke: "#2a7f62"; font-color: "#2a7f62"; font-size: 18}}
+  rest: {style: {stroke: "#1f5fbf"; font-color: "#1f5fbf"; font-size: 18}}
+  note: {style: {font-size: 18; fill: "#fff6e0"; stroke: "#7a4b00"}}
+  llmnote: {style: {font-size: 18; fill: "#f6f0fc"; stroke: "#6c3fb5"}}
+  actor: {style: {font-size: 20}}
 }
 
-physics: "physics engine +\nsensor gateway"
-edge0: "edge level0\n(active, Pi 400)"
-edge12: "edge level1 + level2\n(actives)"
-server: "fds-server\n(Tier 2 agent)"
-llm: "LLM\n(Qwen2.5-14B)"
-buildsim: "BuildSim\n(doors, viewer)"
+edge0: "edge level0\n(active, Pi)" {class: actor}
+edge12: "edge level1 + level2" {class: actor}
+server: "fds-server" {class: actor}
+buildsim: "BuildSim" {class: actor}
 
-A: "Baseline fire (scenario 6, 4 Oct 2026, UTC timestamps): A109 on level0, 45 s burn" {
-  physics."13:45:52.680  fire/start A109 (control API)" {class: note}
-  physics -> edge0: "building/level0/A109/{smoke,co,temperature} every ~1 s (spread to A108, A110, corridor via door graph)" {class: hb}
-  edge0."13:46:07.357  tick: smoke 14.3 ≥ 10 and CO 37.7 ≥ 20 → FIRE  (IF 17.5 ms)" {class: note}
-  edge0 -> buildsim: "PUT 41 doors closed_unlocked  (+14.7 s after ignition, no server involved)" {class: rest}
-  edge0 -> server: "13:46:07.358  alerts/level0/A109  decision=fire severity=confirmed" {class: alert}
-  server -> llm: "verdict request: readings, rates, faulty-sensor list, spread risk, route" {class: llm}
-  llm -> server: "13:46:10.326  {is_fire: true, confidence ≥ 0.7}  (2 967 ms)" {class: llm}
-  server -> edge12: "13:46:10.351  commands/level1/doors, commands/level2/doors  action=release  (+25 ms)" {class: cmd}
-  edge12 -> buildsim: "PUT 46 + 37 doors closed_unlocked  (server_release)" {class: rest}
-  server -> buildsim: "effects, red card, evacuation route, coverage for A109" {class: rest}
-  edge0 -> server: "13:46:17  A110, corridor room: possible → fire (neighbours), assessed in parallel" {class: alert}
-  physics."13:46:37.688  fire/stop A109; smoke and CO decay (CO halves every ~60 s)" {class: note}
-  physics -> edge0: "readings fall; edge publishes decisions/… clear per room" {class: hb}
-  server."readings clear (smoke < 2, CO < 5 on live sensors) for 60 s per room" {class: note}
-  server -> edge0: "13:52:54 … 13:53:59  commands/level0/stand-down per room; last one floor_clear=true" {class: cmd}
-  edge0 -> buildsim: "13:53:59.621  PUT 41 doors closed_locked  (own release ended)" {class: rest}
-  server -> edge12: "13:53:59.171  ALL CLEAR: commands/*/doors action=lock" {class: cmd}
-  edge12 -> buildsim: "PUT 46 + 37 doors closed_locked" {class: rest}
-  server -> buildsim: "clear effects, cards, coverage" {class: rest}
-}
+edge0."13:45:52.680  fire/start A109 (control API)\nreadings every ~1 s; spread to A108, A110, corridor" {class: note}
+edge0."13:46:07.357  smoke 14.3, CO 37.7 → FIRE\n(isolation forest 17.5 ms)" {class: note}
+edge0 -> buildsim: "PUT 41 doors closed_unlocked\n+14.7 s after ignition, no server involved" {class: rest}
+edge0 -> server: "13:46:07.358  alert A109\nseverity = confirmed" {class: alert}
+server."13:46:10.326  LLM verdict: is_fire, confidence ≥ 0.7\n(2 967 ms, Qwen2.5-14B)" {class: llmnote}
+server -> edge12: "13:46:10.351  doors: release\n(+25 ms after the verdict)" {class: cmd}
+edge12 -> buildsim: "PUT 46 + 37 doors closed_unlocked\n(server pushes effects, red card, route)" {class: rest}
+edge0 -> server: "13:46:17  A110, corridor: fire\n(neighbours, assessed in parallel)" {class: alert}
+edge0."13:46:37.688  fire/stop A109\nsmoke and CO decay (CO halves every ~60 s)" {class: note}
+server."readings clear (smoke < 2, CO < 5)\nfor 60 s per room" {class: note}
+server -> edge0: "13:52:54 … 13:53:59  stand-down per room\nlast one: floor_clear = true" {class: cmd}
+edge0 -> buildsim: "13:53:59.621  PUT 41 doors closed_locked" {class: rest}
+server -> edge12: "13:53:59.171  ALL CLEAR: doors: lock" {class: cmd}
+edge12 -> buildsim: "PUT 46 + 37 doors closed_locked\n(server clears effects and cards)" {class: rest}
